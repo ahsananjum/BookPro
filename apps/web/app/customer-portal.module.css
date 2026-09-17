@@ -1,0 +1,52 @@
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
+/* Hallmark · genre: modern-minimal · macrostructure: Ecosystem Index · theme: BookPro Midnight · enrichment: real organization logos only · contrast: pass (40–41) · nav: N1a · footer: none · slop: pass (42–45) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive/mobile: pass (34, 49–57) */
+.page { min-height: 100dvh; background: var(--portal-canvas); color: var(--portal-ink); font-family: var(--portal-font-body); }
+.shell { width: min(100% - 2rem, 76rem); margin-inline: auto; padding-block: var(--portal-space-6) var(--portal-space-16); }
+.topbar { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: var(--portal-space-4); min-height: 3rem; }
+.brand { display: inline-flex; align-items: center; gap: var(--portal-space-3); color: var(--portal-ink); text-decoration: none; font-family: var(--portal-font-display); font-weight: 800; white-space: nowrap; }
+.brandMark { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: var(--portal-radius-sm); background: var(--portal-accent); color: var(--portal-accent-ink); }
+.topActions { display: flex; align-items: center; gap: var(--portal-space-3); }
+.textLink { color: var(--portal-ink-soft); text-decoration: none; font-size: var(--portal-text-sm); font-weight: 700; white-space: nowrap; }
+.hero { display: grid; gap: var(--portal-space-5); padding-block: clamp(3rem, 6vw, 5rem) clamp(4.5rem, 8vw, 6.5rem); border-bottom: 1px solid var(--portal-rule); }
+.hero h1 { max-width: 13ch; min-width: 0; color: var(--portal-ink); font-family: var(--portal-font-display); font-size: var(--portal-text-display); font-style: normal; font-weight: 650; line-height: .95; letter-spacing: -.055em; overflow-wrap: anywhere; }
+.hero p { max-width: 60ch; color: var(--portal-muted); line-height: 1.65; }
+.summary { color: var(--portal-accent); font-family: var(--portal-font-mono); font-size: .75rem; letter-spacing: .04em; }
+.controls { display: grid; gap: var(--portal-space-3); padding-block: var(--portal-space-6); }
+.field { display: grid; gap: var(--portal-space-2); min-width: 0; color: var(--portal-ink-soft); font-size: .75rem; font-weight: 750; }
+.field input,.field select,.field textarea { width: 100%; min-width: 0; min-height: 2.75rem; border: 1px solid var(--portal-rule-strong); border-radius: var(--portal-radius-sm); outline: 2px solid transparent; outline-offset: 1px; background: var(--portal-field); color: var(--portal-ink); padding: var(--portal-space-3); }
+.field input:disabled,.field select:disabled,.field textarea:disabled { cursor: not-allowed; opacity: .55; color: var(--portal-muted); }
+.field input[aria-invalid="true"],.field select[aria-invalid="true"],.field textarea[aria-invalid="true"] { border-color: var(--portal-error); }
+.field textarea { min-height: 7rem; resize: vertical; }
+.field input:focus-visible,.field select:focus-visible,.field textarea:focus-visible { outline-color: var(--portal-focus); }
+.consent { display: flex; align-items: flex-start; gap: var(--portal-space-3); color: var(--portal-muted); font-size: var(--portal-text-sm); line-height: 1.5; }
+.consent input { width: 1.1rem; height: 1.1rem; margin-block-start: 0; accent-color: var(--portal-accent-strong); }
+.railHeader { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--portal-space-4); padding-block: var(--portal-space-6) var(--portal-space-4); }
+.railHeader h2 { font-family: var(--portal-font-display); font-size: clamp(1.35rem, 3vw, 2rem); font-style: normal; letter-spacing: -.03em; }
+.railHeader span { color: var(--portal-muted); font-size: var(--portal-text-sm); white-space: nowrap; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--portal-space-4); }
+.card { display: grid; align-content: space-between; min-width: 0; min-height: 15rem; border: 1px solid var(--portal-rule); border-radius: var(--portal-radius-md); background: var(--portal-surface); color: var(--portal-ink); padding: var(--portal-space-5); }
+.cardHead { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--portal-space-4); }
+.logo { width: 2.75rem; height: 2.75rem; flex: 0 0 auto; border: 1px solid var(--portal-rule); border-radius: var(--portal-radius-sm); background: var(--portal-surface-raised); object-fit: cover; }
+.logoFallback { display: grid; place-items: center; color: var(--portal-accent); font-family: var(--portal-font-display); font-size: 1.1rem; font-weight: 800; }
+.meta { color: var(--portal-accent); font-family: var(--portal-font-mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; }
+.card h3 { margin-block-start: var(--portal-space-4); font-family: var(--portal-font-display); font-size: 1.35rem; font-style: normal; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.facts { display: flex; flex-wrap: wrap; gap: var(--portal-space-3); margin-block: var(--portal-space-5); color: var(--portal-muted); font-size: .8rem; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--portal-space-2); }
+.button,.buttonSecondary { display: inline-flex; min-height: 2.75rem; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: var(--portal-radius-sm); padding: var(--portal-space-3) var(--portal-space-4); font-weight: 800; text-decoration: none; white-space: nowrap; transition: transform var(--portal-duration-fast) var(--portal-ease-out), background-color var(--portal-duration-fast) var(--portal-ease-out); }
+.button { background: var(--portal-accent); color: var(--portal-accent-ink); }
+.buttonSecondary { border-color: var(--portal-rule-strong); background: var(--portal-surface-raised); color: var(--portal-ink); }
+.button:focus-visible,.buttonSecondary:focus-visible,.textLink:focus-visible,.brand:focus-visible { outline: 3px solid var(--portal-focus); outline-offset: 2px; }
+.button:active,.buttonSecondary:active { transform: translateY(1px); }
+.button:disabled,.buttonSecondary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.success { border: 1px solid var(--portal-success); border-radius: var(--portal-radius-sm); background: var(--portal-success-surface); color: var(--portal-success); padding: var(--portal-space-3) var(--portal-space-4); }
+.error { border: 1px solid var(--portal-error); border-radius: var(--portal-radius-sm); background: var(--portal-error-surface); color: var(--portal-error); padding: var(--portal-space-3) var(--portal-space-4); }
+.empty { display: grid; justify-items: start; gap: var(--portal-space-3); border: 1px dashed var(--portal-rule-strong); border-radius: var(--portal-radius-md); color: var(--portal-muted); padding: var(--portal-space-8); }
+.pagination { display: flex; align-items: center; justify-content: center; gap: var(--portal-space-3); padding-block-start: var(--portal-space-8); }
+.pagination span { color: var(--portal-muted); font-size: var(--portal-text-sm); white-space: nowrap; }
+.customerIntro { display: grid; gap: var(--portal-space-4); padding-block: clamp(3rem, 8vw, 6rem) var(--portal-space-8); }
+.customerIntro h1 { font-family: var(--portal-font-display); font-size: clamp(2.3rem, 6vw, 4.7rem); font-style: normal; line-height: 1; letter-spacing: -.05em; overflow-wrap: anywhere; }
+.customerIntro p { max-width: 58ch; color: var(--portal-muted); line-height: 1.6; }
+@media (min-width: 40rem) { .topbar { flex-direction: row; align-items: center; } .controls { grid-template-columns: minmax(0,2fr) repeat(3,minmax(0,1fr)); align-items: end; } .grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (min-width: 64rem) { .grid { grid-template-columns: repeat(3,minmax(0,1fr)); } .cardFeatured { grid-column: span 2; } }
+@media (hover:hover) and (pointer:fine) { .textLink:hover { color: var(--portal-ink); } .card:hover { border-color: var(--portal-rule-strong); } .field input:hover,.field select:hover,.field textarea:hover { background: var(--portal-surface); } .button:hover { background: var(--portal-accent-strong); color: var(--portal-ink); transform: translateY(-1px); } .buttonSecondary:hover { background: var(--portal-field); transform: translateY(-1px); } }
+@media (prefers-reduced-motion:reduce) { .button,.buttonSecondary { transition-duration: 0ms; } }

@@ -1,0 +1,9 @@
+{
+  "extends": "@bookpro/tsconfig/nestjs.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["**/*.spec.ts", "**/run-*.ts"]
+}

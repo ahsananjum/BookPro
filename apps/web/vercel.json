@@ -1,0 +1,6 @@
+{
+    "version": 2,
+    "buildCommand": "pnpm --filter @bookpro/web build",
+    "outputDirectory": ".next",
+    "framework": "nextjs"
+}

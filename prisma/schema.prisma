@@ -1,0 +1,2168 @@
+// BookPro Canonical Prisma Schema Baseline
+// Source Specification: docs/DATABASE.md & ARCHITECTURE.md §127-136
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum RoleCode {
+  OWNER
+  ADMIN
+  MANAGER
+  RECEPTIONIST
+  STAFF
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+  INVITED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+enum AccountType {
+  ORGANIZATION
+  CUSTOMER
+}
+
+enum EmailCampaignStatus {
+  DRAFT
+  QUEUED
+  SENT
+}
+
+enum EntitlementStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum AppointmentStatus {
+  HOLD
+  PENDING_PAYMENT
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum WaitlistEntryStatus {
+  ACTIVE
+  OFFERED
+  BOOKED
+  EXPIRED
+  CANCELLED
+}
+
+enum WaitlistOfferStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+  LOST_TO_ANOTHER_CUSTOMER
+}
+
+enum TimeOfDayPreference {
+  ANY
+  MORNING
+  AFTERNOON
+  EVENING
+}
+
+enum AIConversationChannel {
+  TEXT
+  VOICE
+}
+
+enum AIConversationStatus {
+  ACTIVE
+  CLOSED
+  EXPIRED
+}
+
+enum AIToolExecutionStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+  PROPOSED
+}
+
+enum AIActionProposalStatus {
+  PENDING
+  CONFIRMED
+  EXECUTED
+  EXPIRED
+  REJECTED
+}
+
+enum ScheduleInsightStatus {
+  ACTIVE
+  STALE
+  ACTIONED
+  DISMISSED
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  PENDING_MODERATION
+  HIDDEN
+}
+
+enum AttendanceStatus {
+  ON_TIME
+  LATE
+  EARLY_DEPARTURE
+  CORRECTED
+}
+
+enum ExportType {
+  CUSTOMERS
+  APPOINTMENTS
+  PAYMENTS
+  REVENUE_REPORT
+}
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Organization {
+  id                  String    @id @default(uuid()) @db.Uuid
+  name                String
+  slug                String    @unique
+  timezone            String    @default("UTC")
+  isActive            Boolean   @default(true)
+  industry            String?
+  currency            String    @default("USD")
+  defaultLocale       String    @default("en-US")
+  supportedLocales    Json?
+  country             String    @default("US")
+  phone               String?
+  email               String?
+  website             String?
+  bookingEnabled      Boolean   @default(false)
+  brandName           String?
+  logoUrl             String?
+  faviconUrl          String?
+  primaryColor        String?
+  accentColor         String?
+  onboardingStep      Int       @default(1)
+  onboardingCompleted Boolean   @default(false)
+  stripeAccountId     String?   @unique @map("stripe_account_id")
+  stripeConnectedAt   DateTime? @map("stripe_connected_at") @db.Timestamptz(6)
+  stripeChargesEnabled Boolean  @default(false) @map("stripe_charges_enabled")
+  stripePayoutsEnabled Boolean  @default(false) @map("stripe_payouts_enabled")
+  stripeDetailsSubmitted Boolean @default(false) @map("stripe_details_submitted")
+  paymentIntent       String?   @map("payment_intent")
+  archivedAt          DateTime? @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(6)
+
+  autoOfferEnabled    Boolean @default(false) @map("auto_offer_enabled")
+  noShowSignalEnabled Boolean @default(false) @map("no_show_signal_enabled")
+  optimizerMinGapMin  Int     @default(30) @map("optimizer_min_gap_min")
+
+  locations                 Location[]
+  memberships               Membership[]
+  services                  Service[]
+  customers                 Customer[]
+  invitations               Invitation[]
+  customerInvitations       CustomerInvitation[]
+  emailTemplates            OrganizationEmailTemplate[]
+  emailCampaigns            EmailCampaign[]
+  entitlements              Entitlement[]
+  featureOverrides          FeatureOverride[]
+  auditLogs                 AuditLog[]
+  staffProfiles             StaffProfile[]
+  staffAvailabilities       StaffAvailability[]
+  staffBreaks               StaffBreak[]
+  staffLeaves               StaffLeave[]
+  locationHolidays          LocationHoliday[]
+  scheduleBlocks            ScheduleBlock[]
+  resourcePools             ResourcePool[]
+  resources                 Resource[]
+  intakeForms               IntakeForm[]
+  policyConfigs             PolicyConfig[]
+  storedAssets              StoredAsset[]
+  scheduleGuards            ScheduleGuard[]
+  bookingHolds              BookingHold[]
+  appointments              Appointment[]
+  recurrenceSeries          RecurrenceSeries[]
+  idempotencyRecords        IdempotencyRecord[]
+  paymentRecords            PaymentRecord[]
+  refundRecords             RefundRecord[]
+  coupons                   Coupon[]
+  commissionRules           CommissionRule[]
+  commissionRecords         CommissionRecord[]
+  reconciliationIncidents   ReconciliationIncident[]
+  cancellationQuotes        CancellationQuote[]
+  financialLedgerEntries    FinancialLedgerEntry[]
+  notifications             Notification[]
+  outboxEvents              OutboxEvent[]
+  emailVerificationTokens   EmailVerificationToken[]
+  registrationRequests      RegistrationRequest[]
+  googleCalendarConnections GoogleCalendarConnection[]
+  externalCalendarEvents    ExternalCalendarEvent[]
+  calendarSyncConflicts     CalendarSyncConflict[]
+  waitlistEntries           WaitlistEntry[]
+  waitlistOffers            WaitlistOffer[]
+  aiConversations           AIConversation[]
+  aiToolExecutions          AIToolExecution[]
+  aiActionProposals         AIActionProposal[]
+  scheduleInsights          ScheduleInsight[]
+  orgDailyMetrics           OrgDailyMetric[]
+  locationDailyMetrics      LocationDailyMetric[]
+  staffDailyMetrics         StaffDailyMetric[]
+  serviceDailyMetrics       ServiceDailyMetric[]
+  waitlistDailyMetrics      WaitlistDailyMetric[]
+  reviews                   Review[]
+  staffAttendances          StaffAttendance[]
+  dataExports               DataExport[]
+  productAnalyticsEvents    ProductAnalyticsEvent[]
+  stripeOAuthStates         StripeOAuthState[]
+
+  @@index([slug])
+  @@map("organizations")
+}
+
+model Location {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  name           String
+  slug           String
+  timezone       String    @default("UTC")
+  address        String?
+  city           String?
+  state          String?
+  postalCode     String?
+  country        String    @default("US")
+  phone          String?
+  email          String?
+  operatingHours Json?
+  instructions   String?
+  parkingAccess  String?
+  taxRatePct     Decimal?  @db.Decimal(5, 2)
+  archivedAt     DateTime? @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
+
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staffLocations       StaffLocation[]
+  staffAvailabilities  StaffAvailability[]
+  locationHolidays     LocationHoliday[]
+  scheduleBlocks       ScheduleBlock[]
+  resources            Resource[]
+  policyConfigs        PolicyConfig[]
+  bookingHolds         BookingHold[]
+  appointments         Appointment[]
+  recurrenceSeries     RecurrenceSeries[]
+  waitlistEntries      WaitlistEntry[]
+  waitlistOffers       WaitlistOffer[]
+  scheduleInsights     ScheduleInsight[]
+  locationDailyMetrics LocationDailyMetric[]
+  reviews              Review[]
+  staffAttendances     StaffAttendance[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@map("locations")
+}
+
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String    @unique
+  passwordHash    String?
+  fullName        String
+  phone           String?
+  isPlatformAdmin Boolean   @default(false)
+  isActive        Boolean   @default(true)
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz(6)
+  accountType     AccountType @default(ORGANIZATION) @map("account_type")
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
+
+  memberships             Membership[]
+  customers               Customer[]
+  emailVerificationTokens EmailVerificationToken[]
+  registrationRequests    RegistrationRequest[]
+  customerInvitations     CustomerInvitation[] @relation("AcceptedCustomerInvitation")
+  authSessions            AuthSession[]
+  mfaCredential           MfaCredential?
+  mfaChallenges           MfaChallenge[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model EmailVerificationToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+  tokenHash      String    @unique @map("token_hash")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt     DateTime? @map("consumed_at") @db.Timestamptz(6)
+  attempts       Int       @default(0)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt])
+  @@index([organizationId])
+  @@index([expiresAt])
+  @@map("email_verification_tokens")
+}
+
+model RegistrationRequest {
+  id                 String   @id @default(uuid()) @db.Uuid
+  idempotencyKey     String   @unique @map("idempotency_key")
+  requestFingerprint String   @map("request_fingerprint")
+  userId             String   @unique @map("user_id") @db.Uuid
+  organizationId     String   @unique @map("organization_id") @db.Uuid
+  completedAt        DateTime @default(now()) @map("completed_at") @db.Timestamptz(6)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("registration_requests")
+}
+
+model Role {
+  code           RoleCode @id
+  name           String
+  description    String?
+  isPlatformRole Boolean  @default(false)
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model RolePermission {
+  id            String   @id @default(uuid()) @db.Uuid
+  roleCode      RoleCode
+  permissionKey String
+
+  role Role @relation(fields: [roleCode], references: [code], onDelete: Cascade)
+
+  @@unique([roleCode, permissionKey])
+  @@index([roleCode])
+  @@map("role_permissions")
+}
+
+model Membership {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  userId         String           @db.Uuid
+  roleCode       RoleCode         @default(STAFF)
+  status         MembershipStatus @default(ACTIVE)
+  locationIds    Json?
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staffProfile StaffProfile?
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Invitation {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  email          String
+  roleCode       RoleCode         @default(STAFF)
+  locationIds    Json?
+  tokenHash      String           @unique @map("token_hash")
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime         @db.Timestamptz(6)
+  createdBy      String?          @db.Uuid
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@index([tokenHash])
+  @@map("invitations")
+}
+
+model CustomerInvitation {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  email          String
+  tokenHash      String           @unique @map("token_hash")
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime         @db.Timestamptz(6)
+  createdBy      String?          @db.Uuid
+  acceptedById   String?          @map("accepted_by_id") @db.Uuid
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  acceptedBy   User?        @relation("AcceptedCustomerInvitation", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([organizationId, status, expiresAt])
+  @@index([organizationId, email, status])
+  @@index([email])
+  @@map("customer_invitations")
+}
+
+model OrganizationEmailTemplate {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  subject        String
+  htmlBody       String   @map("html_body")
+  textBody       String?  @map("text_body")
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaigns    EmailCampaign[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("organization_email_templates")
+}
+
+model EmailCampaign {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  templateId     String              @map("template_id") @db.Uuid
+  name           String
+  status         EmailCampaignStatus @default(DRAFT)
+  recipientCount Int                 @default(0) @map("recipient_count")
+  deliveredCount Int                 @default(0) @map("delivered_count")
+  failedCount    Int                 @default(0) @map("failed_count")
+  sentAt         DateTime?           @map("sent_at") @db.Timestamptz(6)
+  createdBy      String?             @db.Uuid
+  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(6)
+
+  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  template     OrganizationEmailTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  notifications Notification[]
+
+  @@index([organizationId, createdAt])
+  @@map("email_campaigns")
+}
+
+model AuthSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  organizationId   String?   @map("organization_id") @db.Uuid
+  deviceName       String    @map("device_name")
+  authLevel        String    @default("pwd") @map("auth_level")
+  userAgent        String?   @map("user_agent")
+  ipAddress        String?   @map("ip_address")
+  lastSeenAt       DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revocationReason String?   @map("revocation_reason")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens AuthRefreshToken[]
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model AuthRefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  sessionId String    @map("session_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session AuthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, usedAt])
+  @@index([expiresAt])
+  @@map("auth_refresh_tokens")
+}
+
+model MfaCredential {
+  userId          String   @id @map("user_id") @db.Uuid
+  secretEncrypted String   @map("secret_encrypted")
+  enabledAt       DateTime @default(now()) @map("enabled_at") @db.Timestamptz(6)
+  lastUsedStep    BigInt?  @map("last_used_step")
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recoveryCodes MfaRecoveryCode[]
+
+  @@map("mfa_credentials")
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @unique @map("code_hash")
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  credential MfaCredential @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@map("mfa_recovery_codes")
+}
+
+model MfaChallenge {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  tokenHash      String    @unique @map("token_hash")
+  purpose        String
+  pendingSecret  String?   @map("pending_secret")
+  organizationId String?   @map("organization_id") @db.Uuid
+  ipAddress      String?   @map("ip_address")
+  userAgent      String?   @map("user_agent")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt     DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt])
+  @@index([expiresAt])
+  @@map("mfa_challenges")
+}
+
+model AuthRateLimit {
+  key          String    @id
+  attempts     Int       @default(0)
+  windowEnd    DateTime  @map("window_end") @db.Timestamptz(6)
+  blockedUntil DateTime? @map("blocked_until") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([windowEnd])
+  @@map("auth_rate_limits")
+}
+
+model Plan {
+  id                 String   @id @default(uuid()) @db.Uuid
+  code               String   @unique
+  name               String
+  maxLocations       Int      @default(1)
+  maxStaff           Int      @default(5)
+  maxMonthlyBookings Int      @default(500)
+  features           Json?
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+
+  entitlements Entitlement[]
+
+  @@map("plans")
+}
+
+model Entitlement {
+  id                 String            @id @default(uuid()) @db.Uuid
+  organizationId     String            @db.Uuid
+  planId             String            @db.Uuid
+  status             EntitlementStatus @default(ACTIVE)
+  currentPeriodStart DateTime          @default(now()) @db.Timestamptz(6)
+  currentPeriodEnd   DateTime          @db.Timestamptz(6)
+  createdAt          DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId])
+  @@map("entitlements")
+}
+
+model FeatureOverride {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  featureKey     String
+  enabled        Boolean  @default(true)
+  limitOverride  Int?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, featureKey])
+  @@index([organizationId])
+  @@map("feature_overrides")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String?  @db.Uuid
+  actorType      String
+  actorId        String
+  action         String
+  resourceType   String
+  resourceId     String
+  payload        Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([actorId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model Service {
+  id                      String    @id @default(uuid()) @db.Uuid
+  organizationId          String    @db.Uuid
+  name                    String
+  description             String?
+  category                String?
+  imageUrl                String?
+  durationMin             Int
+  preBufferMin            Int       @default(0)
+  postBufferMin           Int       @default(0)
+  priceCents              Int
+  currency                String    @default("USD")
+  depositType             String?   @default("NONE")
+  depositValue            Int?      @default(0)
+  taxBehavior             String    @default("EXCLUSIVE")
+  capacity                Int       @default(1)
+  minParticipants         Int       @default(1)
+  maxParticipants         Int       @default(1)
+  version                 Int       @default(1)
+  preparationInstructions String?
+  isActive                Boolean   @default(true)
+  archivedAt              DateTime? @db.Timestamptz(6)
+  createdAt               DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime  @updatedAt @db.Timestamptz(6)
+
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staffServices       StaffService[]
+  serviceResources    ServiceResource[]
+  serviceIntakeForms  ServiceIntakeForm[]
+  policyConfigs       PolicyConfig[]
+  bookingHolds        BookingHold[]
+  appointments        Appointment[]
+  recurrenceSeries    RecurrenceSeries[]
+  waitlistEntries     WaitlistEntry[]
+  waitlistOffers      WaitlistOffer[]
+  scheduleInsights    ScheduleInsight[]
+  serviceDailyMetrics ServiceDailyMetric[]
+  reviews             Review[]
+
+  @@index([organizationId])
+  @@map("services")
+}
+
+model Customer {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String?  @db.Uuid
+  fullName       String
+  email          String
+  phone          String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  organization               Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                       User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tags                       String[]           @default([])
+  operationalNotes           String?
+  totalSpentCents            Int                @default(0)
+  completedAppointmentsCount Int                @default(0)
+  cancelledCount             Int                @default(0)
+  noShowCount                Int                @default(0)
+  lastBookingAt              DateTime?          @db.Timestamptz(6)
+  nextBookingAt              DateTime?          @db.Timestamptz(6)
+  consentMarketing           Boolean            @default(false)
+  consentMarketingAt         DateTime?          @db.Timestamptz(6)
+  consentSource              String?
+  notes                      CustomerNote[]
+  bookingHolds               BookingHold[]
+  appointments               Appointment[]
+  recurrenceSeries           RecurrenceSeries[]
+  notifications              Notification[]
+  waitlistEntries            WaitlistEntry[]
+  reviews                    Review[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([organizationId, userId])
+  @@index([userId])
+  @@map("customers")
+}
+
+model OutboxEvent {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String?   @db.Uuid
+  aggregateType     String
+  aggregateId       String
+  eventType         String
+  eventVersion      Int       @default(1)
+  payload           Json
+  status            String    @default("PENDING")
+  attempts          Int       @default(0)
+  lastError         String?
+  workerId          String?   @map("worker_id")
+  claimedAt         DateTime? @map("claimed_at") @db.Timestamptz(6)
+  leaseExpiresAt    DateTime? @map("lease_expires_at") @db.Timestamptz(6)
+  completedHandlers String[]  @default([]) @map("completed_handlers")
+  deadLetteredAt    DateTime? @map("dead_lettered_at") @db.Timestamptz(6)
+  availableAt       DateTime  @default(now()) @db.Timestamptz(6)
+  processedAt       DateTime? @db.Timestamptz(6)
+  publishedAt       DateTime? @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt, leaseExpiresAt])
+  @@index([status, availableAt, createdAt])
+  @@index([organizationId])
+  @@map("outbox_events")
+}
+
+model StaffProfile {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @db.Uuid
+  membershipId       String    @unique @db.Uuid
+  displayName        String
+  title              String?
+  bio                String?
+  avatarUrl          String?
+  skills             Json?
+  isActive           Boolean   @default(true)
+  bookingVisible     Boolean   @default(true)
+  calendarColor      String?   @default("#3B82F6")
+  commissionRuleRef  String?
+  attendanceSettings Json?
+  createdAt          DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(6)
+  archivedAt         DateTime? @db.Timestamptz(6)
+
+  organization              Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership                Membership                 @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  staffLocations            StaffLocation[]
+  staffServices             StaffService[]
+  availabilities            StaffAvailability[]
+  breaks                    StaffBreak[]
+  leaves                    StaffLeave[]
+  scheduleBlocks            ScheduleBlock[]
+  bookingHolds              BookingHold[]
+  appointments              Appointment[]
+  recurrenceSeries          RecurrenceSeries[]
+  commissionRules           CommissionRule[]
+  commissionRecords         CommissionRecord[]
+  googleCalendarConnections GoogleCalendarConnection[]
+  externalEvents            ExternalCalendarEvent[]
+  calendarSyncConflicts     CalendarSyncConflict[]
+  waitlistEntries           WaitlistEntry[]
+  waitlistOffers            WaitlistOffer[]
+  scheduleInsights          ScheduleInsight[]
+  staffDailyMetrics         StaffDailyMetric[]
+  reviews                   Review[]
+  staffAttendances          StaffAttendance[]
+
+  @@index([organizationId])
+  @@map("staff_profiles")
+}
+
+model StaffLocation {
+  id         String @id @default(uuid()) @db.Uuid
+  staffId    String @db.Uuid
+  locationId String @db.Uuid
+
+  staff    StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  location Location     @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, locationId])
+  @@index([staffId])
+  @@index([locationId])
+  @@map("staff_locations")
+}
+
+model StaffService {
+  id                String @id @default(uuid()) @db.Uuid
+  staffId           String @db.Uuid
+  serviceId         String @db.Uuid
+  customPriceCents  Int?
+  customDurationMin Int?
+
+  staff   StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  service Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, serviceId])
+  @@index([staffId])
+  @@index([serviceId])
+  @@map("staff_services")
+}
+
+model StaffAvailability {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  staffId        String   @db.Uuid
+  locationId     String?  @db.Uuid
+  dayOfWeek      Int
+  startTime      String
+  endTime        String
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staff        StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  location     Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([staffId])
+  @@map("staff_availabilities")
+}
+
+model StaffBreak {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  staffId        String   @db.Uuid
+  dayOfWeek      Int?
+  startTime      String
+  endTime        String
+  label          String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staff        StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([staffId])
+  @@map("staff_breaks")
+}
+
+model StaffLeave {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  staffId        String    @db.Uuid
+  startDate      DateTime  @db.Timestamptz(6)
+  endDate        DateTime  @db.Timestamptz(6)
+  reason         String?
+  status         String    @default("APPROVED")
+  approvedBy     String?   @db.Uuid
+  approvedAt     DateTime? @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staff        StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([staffId])
+  @@map("staff_leaves")
+}
+
+model LocationHoliday {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  locationId     String?  @db.Uuid
+  date           DateTime @db.Date
+  name           String
+  isClosed       Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location     Location?    @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([locationId])
+  @@map("location_holidays")
+}
+
+model ScheduleBlock {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  locationId     String?  @db.Uuid
+  staffId        String?  @db.Uuid
+  resourceId     String?  @db.Uuid
+  startAt        DateTime @db.Timestamptz(6)
+  endAt          DateTime @db.Timestamptz(6)
+  reason         String?
+  sourceType     String   @default("MANUAL")
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location     Location?     @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  staff        StaffProfile? @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  resource     Resource?     @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([staffId])
+  @@index([resourceId])
+  @@map("schedule_blocks")
+}
+
+model ResourcePool {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  category       String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  resources        Resource[]
+  serviceResources ServiceResource[]
+
+  @@index([organizationId])
+  @@map("resource_pools")
+}
+
+model Resource {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  locationId     String    @db.Uuid
+  poolId         String?   @db.Uuid
+  name           String
+  type           String
+  quantity       Int       @default(1)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
+  archivedAt     DateTime? @db.Timestamptz(6)
+
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location             Location              @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  pool                 ResourcePool?         @relation(fields: [poolId], references: [id], onDelete: SetNull)
+  serviceResources     ServiceResource[]
+  scheduleBlocks       ScheduleBlock[]
+  appointmentResources AppointmentResource[]
+
+  @@index([organizationId])
+  @@index([locationId])
+  @@map("resources")
+}
+
+model ServiceResource {
+  id               String  @id @default(uuid()) @db.Uuid
+  serviceId        String  @db.Uuid
+  resourceId       String? @db.Uuid
+  resourcePoolId   String? @db.Uuid
+  quantityRequired Int     @default(1)
+
+  service      Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  resource     Resource?     @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  resourcePool ResourcePool? @relation(fields: [resourcePoolId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+  @@map("service_resources")
+}
+
+model IntakeForm {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  name           String
+  description    String?
+  isGlobal       Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  fields         Json
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
+  archivedAt     DateTime? @db.Timestamptz(6)
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  serviceIntakeForms ServiceIntakeForm[]
+  intakeResponses    IntakeResponse[]
+
+  @@index([organizationId])
+  @@map("intake_forms")
+}
+
+model ServiceIntakeForm {
+  id           String  @id @default(uuid()) @db.Uuid
+  serviceId    String  @db.Uuid
+  intakeFormId String  @db.Uuid
+  isRequired   Boolean @default(true)
+
+  service    Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  intakeForm IntakeForm @relation(fields: [intakeFormId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, intakeFormId])
+  @@index([serviceId])
+  @@map("service_intake_forms")
+}
+
+model PolicyConfig {
+  id                         String   @id @default(uuid()) @db.Uuid
+  organizationId             String   @db.Uuid
+  locationId                 String?  @db.Uuid
+  serviceId                  String?  @db.Uuid
+  minNoticeHours             Int      @default(24)
+  maxNoticeDays              Int      @default(60)
+  cancelCutoffHours          Int      @default(24)
+  cancelFeeType              String   @default("NONE")
+  cancelFeeValue             Int      @default(0)
+  rescheduleCutoffHours      Int      @default(24)
+  holdDurationMinutes        Int      @default(10)
+  waitlistOfferExpiryMinutes Int      @default(15)
+  createdAt                  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt                  DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location     Location?    @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  service      Service?     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([locationId])
+  @@index([serviceId])
+  @@map("policy_configs")
+}
+
+model StoredAsset {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  storageKey     String
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  isPublic       Boolean  @default(true)
+  createdById    String?  @db.Uuid
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("stored_assets")
+}
+
+model ScheduleGuard {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  subjectType    String // STAFF | RESOURCE | CAPACITY
+  subjectId      String
+  dateBucket     String // YYYY-MM-DD
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, subjectType, subjectId, dateBucket])
+  @@index([organizationId])
+  @@map("schedule_guards")
+}
+
+model BookingHold {
+  id                  String   @id @default(uuid()) @db.Uuid
+  organizationId      String   @db.Uuid
+  locationId          String   @db.Uuid
+  serviceId           String   @db.Uuid
+  staffId             String?  @db.Uuid
+  customerId          String?  @db.Uuid
+  guestName           String?
+  guestEmail          String?
+  guestPhone          String?
+  guestNotes          String?   @map("guest_notes")
+  consentMarketing    Boolean   @default(false) @map("consent_marketing")
+  consentCapturedAt   DateTime? @map("consent_captured_at") @db.Timestamptz(6)
+  detailsCompletedAt  DateTime? @map("details_completed_at") @db.Timestamptz(6)
+  intakeSnapshot      Json?     @map("intake_snapshot")
+  startAt             DateTime  @db.Timestamptz(6)
+  endAt               DateTime  @db.Timestamptz(6)
+  partySize           Int       @default(1)
+  status              String    @default("ACTIVE") // ACTIVE | CONVERTED | EXPIRED | CANCELLED
+  expiresAt           DateTime  @db.Timestamptz(6)
+  quoteSnapshot       Json
+  resourceAllocations Json?
+  idempotencyKey      String?   @map("idempotency_key")
+  createdById         String?   @db.Uuid
+  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(6)
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location       Location        @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  service        Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staff          StaffProfile?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  customer       Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  appointment    Appointment?
+  paymentRecords PaymentRecord[]
+  waitlistOffers WaitlistOffer[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId])
+  @@index([organizationId, status, expiresAt])
+  @@index([locationId])
+  @@index([staffId])
+  @@index([customerId])
+  @@index([status, expiresAt])
+  @@map("booking_holds")
+}
+
+model Appointment {
+  id                    String            @id @default(uuid()) @db.Uuid
+  organizationId        String            @db.Uuid
+  locationId            String            @db.Uuid
+  serviceId             String            @db.Uuid
+  staffId               String?           @db.Uuid
+  customerId            String            @db.Uuid
+  recurrenceSeriesId    String?           @db.Uuid
+  bookingHoldId         String?           @unique @map("booking_hold_id") @db.Uuid
+  startAt               DateTime          @db.Timestamptz(6)
+  endAt                 DateTime          @db.Timestamptz(6)
+  // Organization-local calendar date; used to enforce one active booking per customer/day.
+  bookingDate           DateTime          @map("booking_date") @db.Date
+  partySize             Int               @default(1)
+  status                AppointmentStatus @default(CONFIRMED)
+  paymentStatus         String            @default("UNPAID") // NOT_REQUIRED | UNPAID | PARTIALLY_PAID | PAID | PARTIALLY_REFUNDED | REFUNDED | FAILED
+  bookingSource         String            @default("CUSTOMER_WEB") // CUSTOMER_WEB | STAFF_MANUAL | RECURRING_SERIES | AI | WAITLIST
+  version               Int               @default(1)
+  cancelReason          String?
+  cancelledAt           DateTime?         @db.Timestamptz(6)
+  cancelledById         String?           @db.Uuid
+  checkInAt             DateTime?         @db.Timestamptz(6)
+  priceCents            Int
+  currency              String            @default("USD")
+  internalNotes         String?
+  overrideReason        String?
+  metadata              Json?
+  recoveredRevenueCents Int?              @map("recovered_revenue_cents")
+  createdAt             DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime          @updatedAt @db.Timestamptz(6)
+
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location               Location                @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  service                Service                 @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staff                  StaffProfile?           @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  customer               Customer                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  recurrenceSeries       RecurrenceSeries?       @relation(fields: [recurrenceSeriesId], references: [id], onDelete: SetNull)
+  bookingHold            BookingHold?            @relation(fields: [bookingHoldId], references: [id], onDelete: SetNull)
+  resources              AppointmentResource[]
+  history                AppointmentHistory[]
+  intakeResponses        IntakeResponse[]
+  paymentRecords         PaymentRecord[]
+  commissionRecords      CommissionRecord[]
+  cancellationQuotes     CancellationQuote[]
+  financialLedgerEntries FinancialLedgerEntry[]
+  notifications          Notification[]
+  externalEvents         ExternalCalendarEvent[]
+  calendarSyncConflicts  CalendarSyncConflict[]
+  waitlistOffers         WaitlistOffer[]
+  review                 Review?
+
+  @@index([organizationId])
+  @@index([locationId])
+  @@index([staffId])
+  @@index([customerId])
+  @@index([startAt, endAt])
+  @@index([organizationId, customerId, bookingDate])
+  @@index([status])
+  @@map("appointments")
+}
+
+model AppointmentResource {
+  id            String @id @default(uuid()) @db.Uuid
+  appointmentId String @db.Uuid
+  resourceId    String @db.Uuid
+  quantity      Int    @default(1)
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  resource    Resource    @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@index([resourceId])
+  @@map("appointment_resources")
+}
+
+model AppointmentHistory {
+  id            String   @id @default(uuid()) @db.Uuid
+  appointmentId String   @db.Uuid
+  actorType     String // STAFF | CUSTOMER | SYSTEM | AI
+  actorId       String
+  action        String // CREATED | RESCHEDULED | CANCELLED | CHECKED_IN | COMPLETED | NO_SHOW | STATUS_CHANGE
+  fromStatus    String?
+  toStatus      String?
+  changes       Json?
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@map("appointment_histories")
+}
+
+model IntakeResponse {
+  id            String   @id @default(uuid()) @db.Uuid
+  appointmentId String   @db.Uuid
+  intakeFormId  String   @db.Uuid
+  responses     Json
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  intakeForm  IntakeForm  @relation(fields: [intakeFormId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@index([intakeFormId])
+  @@map("intake_responses")
+}
+
+model RecurrenceSeries {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @db.Uuid
+  locationId       String    @db.Uuid
+  serviceId        String    @db.Uuid
+  staffId          String?   @db.Uuid
+  customerId       String    @db.Uuid
+  frequency        String // WEEKLY | MONTHLY_DATE | MONTHLY_WEEKDAY
+  interval         Int       @default(1)
+  byDay            String? // e.g. "MO,WE,FR"
+  byMonthDay       Int?
+  byNthDay         String? // e.g. "1SU", "3TH"
+  startAt          DateTime  @db.Timestamptz(6)
+  endAt            DateTime? @db.Timestamptz(6)
+  occurrencesCount Int?
+  status           String    @default("ACTIVE") // ACTIVE | PAUSED | COMPLETED | CANCELLED
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location     Location      @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  service      Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staff        StaffProfile? @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([organizationId])
+  @@index([customerId])
+  @@map("recurrence_series")
+}
+
+enum IdempotencyStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model IdempotencyRecord {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  operation      String            @default("DEFAULT")
+  idempotencyKey String            @map("idempotency_key")
+  requestHash    String            @map("request_hash")
+  status         IdempotencyStatus @default(IN_PROGRESS)
+  statusCode     Int?              @map("status_code")
+  responseBody   Json?             @map("response_body")
+  errorMessage   String?           @map("error_message")
+  lockedAt       DateTime?         @map("locked_at") @db.Timestamptz(6)
+  expiresAt      DateTime          @map("expires_at") @db.Timestamptz(6)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, operation, idempotencyKey])
+  @@index([organizationId])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+enum PaymentRecordStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REQUIRES_RECONCILIATION
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum WebhookStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum CommissionType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum CommissionBasis {
+  NET_SERVICE_PRICE
+  GROSS_SERVICE_PRICE
+  TOTAL_APPOINTMENT_PRICE
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  CLAWED_BACK
+}
+
+enum IncidentType {
+  PAID_HOLD_EXPIRED_SLOT_LOST
+  UNFINALIZED_PAYMENT
+  AMBIGUOUS_REFUND
+  PROVIDER_TIMEOUT
+}
+
+enum IncidentStatus {
+  OPEN
+  RESOLVED
+  AUTO_REFUNDED
+}
+
+model PaymentRecord {
+  id                String              @id @default(uuid()) @db.Uuid
+  organizationId    String              @map("organization_id") @db.Uuid
+  locationId        String?             @map("location_id") @db.Uuid
+  appointmentId     String?             @map("appointment_id") @db.Uuid
+  bookingHoldId     String?             @map("booking_hold_id") @db.Uuid
+  provider          String              @default("STRIPE")
+  providerPaymentId String              @unique @map("provider_payment_id")
+  amountCents       Int                 @map("amount_cents")
+  currency          String              @default("USD")
+  status            PaymentRecordStatus @default(PENDING)
+  idempotencyKey    String              @unique @map("idempotency_key")
+  clientSecret      String?             @map("client_secret")
+  metadata          Json?
+  failureReason     String?             @map("failure_reason")
+  paidAt            DateTime?           @map("paid_at") @db.Timestamptz(6)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization           Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointment            Appointment?           @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  bookingHold            BookingHold?           @relation(fields: [bookingHoldId], references: [id], onDelete: SetNull)
+  refunds                RefundRecord[]
+  financialLedgerEntries FinancialLedgerEntry[]
+
+  @@index([organizationId, status])
+  @@index([bookingHoldId])
+  @@index([appointmentId])
+  @@map("payment_records")
+}
+
+model RefundRecord {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  paymentId        String       @map("payment_id") @db.Uuid
+  providerRefundId String?      @unique @map("provider_refund_id")
+  amountCents      Int          @map("amount_cents")
+  currency         String       @default("USD")
+  status           RefundStatus @default(PENDING)
+  reason           String?
+  actorType        String       @default("STAFF") @map("actor_type")
+  actorId          String?      @map("actor_id")
+  idempotencyKey   String       @unique @map("idempotency_key")
+  failureReason    String?      @map("failure_reason")
+  processedAt      DateTime?    @map("processed_at") @db.Timestamptz(6)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization           Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  payment                PaymentRecord          @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  financialLedgerEntries FinancialLedgerEntry[]
+
+  @@index([organizationId, status])
+  @@index([paymentId])
+  @@map("refund_records")
+}
+
+model WebhookInbox {
+  id          String        @id @default(uuid()) @db.Uuid
+  provider    String        @default("STRIPE")
+  eventId     String        @unique @map("event_id")
+  eventType   String        @map("event_type")
+  payload     Json
+  status      WebhookStatus @default(PENDING)
+  error       String?
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  processedAt DateTime?     @map("processed_at") @db.Timestamptz(6)
+
+  @@index([status])
+  @@index([eventType])
+  @@map("webhook_inbox")
+}
+
+model Coupon {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  code             String
+  discountType     DiscountType @map("discount_type")
+  discountValue    Int          @map("discount_value")
+  minSpendCents    Int?         @map("min_spend_cents")
+  maxDiscountCents Int?         @map("max_discount_cents")
+  validFrom        DateTime?    @map("valid_from") @db.Timestamptz(6)
+  validTo          DateTime?    @map("valid_to") @db.Timestamptz(6)
+  usageLimit       Int?         @map("usage_limit")
+  usageCount       Int          @default(0) @map("usage_count")
+  isActive         Boolean      @default(true) @map("is_active")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
+  @@map("coupons")
+}
+
+model CommissionRule {
+  id               String          @id @default(uuid()) @db.Uuid
+  organizationId   String          @map("organization_id") @db.Uuid
+  staffId          String?         @map("staff_id") @db.Uuid
+  name             String
+  calculationType  CommissionType  @map("calculation_type")
+  rateValue        Int             @map("rate_value")
+  calculationBasis CommissionBasis @default(NET_SERVICE_PRICE) @map("calculation_basis")
+  ruleVersion      Int             @default(1) @map("rule_version")
+  isActive         Boolean         @default(true) @map("is_active")
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staff        StaffProfile? @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@map("commission_rules")
+}
+
+model CommissionRecord {
+  id                       String           @id @default(uuid()) @db.Uuid
+  organizationId           String           @map("organization_id") @db.Uuid
+  appointmentId            String           @map("appointment_id") @db.Uuid
+  staffId                  String           @map("staff_id") @db.Uuid
+  commissionRuleId         String?          @map("commission_rule_id") @db.Uuid
+  calculatedAmountCents    Int              @map("calculated_amount_cents")
+  currency                 String           @default("USD")
+  calculationBasisSnapshot CommissionBasis  @map("calculation_basis_snapshot")
+  rateValueSnapshot        Int              @map("rate_value_snapshot")
+  ruleVersionSnapshot      Int              @map("rule_version_snapshot")
+  priceSnapshotCents       Int              @map("price_snapshot_cents")
+  status                   CommissionStatus @default(PENDING)
+  payoutId                 String?          @map("payout_id")
+  createdAt                DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointment  Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  staff        StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, staffId])
+  @@index([appointmentId])
+  @@map("commission_records")
+}
+
+model CustomerNote {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  authorId   String   @map("author_id") @db.Uuid
+  noteText   String   @map("note_text")
+  isInternal Boolean  @default(true) @map("is_internal")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_notes")
+}
+
+model ReconciliationIncident {
+  id                String         @id @default(uuid()) @db.Uuid
+  organizationId    String         @map("organization_id") @db.Uuid
+  incidentType      IncidentType   @map("incident_type")
+  providerPaymentId String?        @map("provider_payment_id")
+  appointmentId     String?        @map("appointment_id") @db.Uuid
+  bookingHoldId     String?        @map("booking_hold_id") @db.Uuid
+  status            IncidentStatus @default(OPEN)
+  resolutionNotes   String?        @map("resolution_notes")
+  payload           Json?
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("reconciliation_incidents")
+}
+
+model CancellationQuote {
+  id                    String    @id @default(uuid()) @db.Uuid
+  organizationId        String    @map("organization_id") @db.Uuid
+  appointmentId         String    @map("appointment_id") @db.Uuid
+  appointmentVersion    Int       @map("appointment_version")
+  policyConfigId        String?   @map("policy_config_id") @db.Uuid
+  policyVersion         String    @map("policy_version")
+  policyProvenance      String    @map("policy_provenance")
+  capturedBalanceCents  Int       @map("captured_balance_cents")
+  feeCents              Int       @map("fee_cents")
+  refundableAmountCents Int       @map("refundable_amount_cents")
+  currency              String    @default("USD")
+  quoteSignature        String    @unique @map("quote_signature")
+  reason                String?
+  isAllowed             Boolean   @default(true) @map("is_allowed")
+  status                String    @default("ISSUED") // ISSUED | APPLIED | EXPIRED | SUPERSEDED
+  appliedAt             DateTime? @map("applied_at") @db.Timestamptz(6)
+  expiresAt             DateTime  @map("expires_at") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointment  Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([appointmentId])
+  @@index([quoteSignature])
+  @@map("cancellation_quotes")
+}
+
+enum LedgerEntryType {
+  PAYMENT_CAPTURE
+  CANCELLATION_FEE
+  REFUND_DISBURSEMENT
+  COMMISSION_ACCRUAL
+  COMMISSION_CLAWBACK
+  ADJUSTMENT
+}
+
+model FinancialLedgerEntry {
+  id                String          @id @default(uuid()) @db.Uuid
+  organizationId    String          @map("organization_id") @db.Uuid
+  appointmentId     String?         @map("appointment_id") @db.Uuid
+  paymentId         String?         @map("payment_id") @db.Uuid
+  refundId          String?         @map("refund_id") @db.Uuid
+  entryType         LedgerEntryType @map("entry_type")
+  amountCents       Int             @map("amount_cents")
+  currency          String          @default("USD")
+  balanceAfterCents Int?            @map("balance_after_cents")
+  description       String?
+  metadata          Json?
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointment  Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  payment      PaymentRecord? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  refund       RefundRecord?  @relation(fields: [refundId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, entryType])
+  @@index([appointmentId])
+  @@index([paymentId])
+  @@index([refundId])
+  @@map("financial_ledger_entries")
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  IN_APP
+}
+
+enum NotificationStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model Notification {
+  id              String              @id @default(uuid()) @db.Uuid
+  organizationId  String?             @map("organization_id") @db.Uuid
+  recipient       String
+  channel         NotificationChannel @default(EMAIL)
+  eventType       String              @map("event_type")
+  templateName    String              @map("template_name")
+  templateVersion Int                 @default(1) @map("template_version")
+  variables       Json
+  status          NotificationStatus  @default(QUEUED)
+  providerId      String?             @map("provider_id")
+  appointmentId   String?             @map("appointment_id") @db.Uuid
+  customerId      String?             @map("customer_id") @db.Uuid
+  emailCampaignId String?             @map("email_campaign_id") @db.Uuid
+  campaignCountedAt DateTime?         @map("campaign_counted_at") @db.Timestamptz(6)
+  scheduledAt     DateTime            @default(now()) @map("scheduled_at") @db.Timestamptz(6)
+  sentAt          DateTime?           @map("sent_at") @db.Timestamptz(6)
+  failedAt        DateTime?           @map("failed_at") @db.Timestamptz(6)
+  dedupeKey       String?             @unique @map("dedupe_key")
+  attempts        Int                 @default(0)
+  lastError       String?             @map("last_error")
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointment  Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  customer     Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  emailCampaign EmailCampaign? @relation(fields: [emailCampaignId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([organizationId, dedupeKey])
+  @@index([appointmentId])
+  @@index([customerId])
+  @@index([emailCampaignId, status])
+  @@map("notifications")
+}
+
+enum CalendarConnectionStatus {
+  CONNECTED
+  DEGRADED
+  DISCONNECTED
+  ACTION_REQUIRED
+}
+
+model GoogleCalendarConnection {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  organizationId        String                   @map("organization_id") @db.Uuid
+  staffId               String                   @map("staff_id") @db.Uuid
+  provider              String                   @default("GOOGLE")
+  encryptedRefreshToken String                   @map("encrypted_refresh_token")
+  encryptedAccessToken  String?                  @map("encrypted_access_token")
+  accessTokenExpiresAt  DateTime?                @map("access_token_expires_at") @db.Timestamptz(6)
+  selectedCalendarId    String?                  @default("primary") @map("selected_calendar_id")
+  selectedCalendarName  String?                  @map("selected_calendar_name")
+  syncCursor            String?                  @map("sync_cursor")
+  channelId             String?                  @map("channel_id")
+  resourceId            String?                  @map("resource_id")
+  channelTokenHash      String?                  @map("channel_token_hash")
+  lastMessageNumber     BigInt?                  @map("last_message_number")
+  channelExpiration     DateTime?                @map("channel_expiration") @db.Timestamptz(6)
+  status                CalendarConnectionStatus @default(CONNECTED)
+  lastSyncAt            DateTime?                @map("last_sync_at") @db.Timestamptz(6)
+  lastSuccessAt         DateTime?                @map("last_success_at") @db.Timestamptz(6)
+  lastError             String?                  @map("last_error")
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staff          StaffProfile            @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  externalEvents ExternalCalendarEvent[]
+
+  @@unique([organizationId, staffId, provider])
+  @@index([organizationId])
+  @@index([staffId])
+  @@map("google_calendar_connections")
+}
+
+model GoogleOAuthState {
+  id             String    @id @default(uuid()) @db.Uuid
+  nonceHash      String    @unique @map("nonce_hash")
+  organizationId String    @map("organization_id") @db.Uuid
+  staffId        String    @map("staff_id") @db.Uuid
+  actorId        String    @map("actor_id")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt         DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([expiresAt])
+  @@map("google_oauth_states")
+}
+
+model StripeOAuthState {
+  id             String    @id @default(uuid()) @db.Uuid
+  nonceHash      String    @unique @map("nonce_hash")
+  organizationId String    @map("organization_id") @db.Uuid
+  actorId        String    @map("actor_id")
+  returnPath     String    @map("return_path")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt         DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, expiresAt])
+  @@index([expiresAt])
+  @@map("stripe_oauth_states")
+}
+
+model ExternalCalendarEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  staffId         String   @map("staff_id") @db.Uuid
+  connectionId    String   @map("connection_id") @db.Uuid
+  providerEventId String   @map("provider_event_id")
+  calendarId      String   @map("calendar_id")
+  appointmentId   String?  @map("appointment_id") @db.Uuid
+  title           String?
+  startAt         DateTime @map("start_at") @db.Timestamptz(6)
+  endAt           DateTime @map("end_at") @db.Timestamptz(6)
+  isAllDay        Boolean  @default(false) @map("is_all_day")
+  isBusy          Boolean  @default(true) @map("is_busy")
+  etag            String?
+  status          String   @default("CONFIRMED")
+  version         Int      @default(1)
+  lastSyncedAt    DateTime @default(now()) @map("last_synced_at") @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization          Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staff                 StaffProfile             @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  connection            GoogleCalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  appointment           Appointment?             @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  calendarSyncConflicts CalendarSyncConflict[]
+
+  @@unique([connectionId, providerEventId])
+  @@index([organizationId, staffId, startAt, endAt])
+  @@index([appointmentId])
+  @@map("external_calendar_events")
+}
+
+model CalendarSyncConflict {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  staffId         String    @map("staff_id") @db.Uuid
+  appointmentId   String    @map("appointment_id") @db.Uuid
+  externalEventId String    @map("external_event_id") @db.Uuid
+  conflictStartAt DateTime  @map("conflict_start_at") @db.Timestamptz(6)
+  conflictEndAt   DateTime  @map("conflict_end_at") @db.Timestamptz(6)
+  resolved        Boolean   @default(false)
+  resolvedAt      DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staff         StaffProfile          @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  appointment   Appointment           @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  externalEvent ExternalCalendarEvent @relation(fields: [externalEventId], references: [id], onDelete: Cascade)
+
+  @@unique([appointmentId, externalEventId])
+  @@index([organizationId, staffId, resolved])
+  @@index([appointmentId])
+  @@index([externalEventId])
+  @@map("calendar_sync_conflicts")
+}
+
+model WaitlistEntry {
+  id                   String              @id @default(uuid()) @db.Uuid
+  organizationId       String              @map("organization_id") @db.Uuid
+  customerId           String              @map("customer_id") @db.Uuid
+  serviceId            String              @map("service_id") @db.Uuid
+  locationId           String?             @map("location_id") @db.Uuid
+  staffId              String?             @map("staff_id") @db.Uuid
+  allowFallbackStaff   Boolean             @default(true) @map("allow_fallback_staff")
+  startWindowDate      DateTime            @map("start_window_date") @db.Date
+  endWindowDate        DateTime            @map("end_window_date") @db.Date
+  timePreference       TimeOfDayPreference @default(ANY) @map("time_preference")
+  customStartTimeMin   Int?                @map("custom_start_time_min")
+  customEndTimeMin     Int?                @map("custom_end_time_min")
+  partySize            Int                 @default(1) @map("party_size")
+  notes                String?
+  notificationChannels String[]            @default(["EMAIL"]) @map("notification_channels")
+  status               WaitlistEntryStatus @default(ACTIVE)
+  expiresAt            DateTime?           @map("expires_at") @db.Timestamptz(6)
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  service      Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  location     Location?       @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  staff        StaffProfile?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  offers       WaitlistOffer[]
+
+  @@index([organizationId, status, startWindowDate, endWindowDate])
+  @@index([customerId])
+  @@index([serviceId])
+  @@map("waitlist_entries")
+}
+
+model WaitlistOffer {
+  id                String              @id @default(uuid()) @db.Uuid
+  organizationId    String              @map("organization_id") @db.Uuid
+  waitlistEntryId   String              @map("waitlist_entry_id") @db.Uuid
+  serviceId         String              @map("service_id") @db.Uuid
+  locationId        String              @map("location_id") @db.Uuid
+  staffId           String?             @map("staff_id") @db.Uuid
+  startAt           DateTime            @map("start_at") @db.Timestamptz(6)
+  endAt             DateTime            @map("end_at") @db.Timestamptz(6)
+  score             Float               @default(0)
+  scoreExplanation  Json?               @map("score_explanation")
+  token             String              @unique
+  status            WaitlistOfferStatus @default(PENDING)
+  bookingHoldId     String?             @map("booking_hold_id") @db.Uuid
+  appointmentId     String?             @map("appointment_id") @db.Uuid
+  scheduleInsightId String?             @map("schedule_insight_id") @db.Uuid
+  expiresAt         DateTime            @map("expires_at") @db.Timestamptz(6)
+  acceptedAt        DateTime?           @map("accepted_at") @db.Timestamptz(6)
+  revokedAt         DateTime?           @map("revoked_at") @db.Timestamptz(6)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  waitlistEntry   WaitlistEntry    @relation(fields: [waitlistEntryId], references: [id], onDelete: Cascade)
+  service         Service          @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  location        Location         @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  staff           StaffProfile?    @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  bookingHold     BookingHold?     @relation(fields: [bookingHoldId], references: [id], onDelete: SetNull)
+  appointment     Appointment?     @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  scheduleInsight ScheduleInsight? @relation(fields: [scheduleInsightId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, expiresAt])
+  @@index([waitlistEntryId])
+  @@index([startAt, endAt])
+  @@map("waitlist_offers")
+}
+
+model AIConversation {
+  id                  String                @id @default(uuid()) @db.Uuid
+  organizationId      String                @map("organization_id") @db.Uuid
+  participantType     String                @map("participant_type")
+  participantId       String                @map("participant_id")
+  channel             AIConversationChannel @default(TEXT)
+  status              AIConversationStatus  @default(ACTIVE)
+  safeHistory         Json                  @default("[]") @map("safe_history")
+  contextSummary      String?               @map("context_summary")
+  retentionExpiresAt  DateTime              @map("retention_expires_at") @db.Timestamptz(6)
+  correlationId       String                @map("correlation_id")
+  messageCount        Int                   @default(0) @map("message_count")
+  inputTokens         Int                   @default(0) @map("input_tokens")
+  outputTokens        Int                   @default(0) @map("output_tokens")
+  estimatedCostMicros BigInt?               @map("estimated_cost_micros")
+  lastModel           String?               @map("last_model")
+  lastProvider        String?               @map("last_provider")
+  lastLatencyMs       Int?                  @map("last_latency_ms")
+  lastErrorCode       String?               @map("last_error_code")
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  toolExecutions AIToolExecution[]
+  proposals      AIActionProposal[]
+
+  @@index([organizationId, participantId, updatedAt])
+  @@index([retentionExpiresAt])
+  @@map("ai_conversations")
+}
+
+model AIToolExecution {
+  id              String                @id @default(uuid()) @db.Uuid
+  organizationId  String                @map("organization_id") @db.Uuid
+  conversationId  String                @map("conversation_id") @db.Uuid
+  toolName        String                @map("tool_name")
+  status          AIToolExecutionStatus
+  sideEffect      Boolean               @default(false) @map("side_effect")
+  sanitizedArgs   Json                  @map("sanitized_args")
+  sanitizedResult Json?                 @map("sanitized_result")
+  errorCode       String?               @map("error_code")
+  idempotencyKey  String?               @map("idempotency_key")
+  correlationId   String                @map("correlation_id")
+  startedAt       DateTime              @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt     DateTime?             @map("completed_at") @db.Timestamptz(6)
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, idempotencyKey])
+  @@index([organizationId, toolName, startedAt])
+  @@map("ai_tool_executions")
+}
+
+model AIActionProposal {
+  id                String                 @id @default(uuid()) @db.Uuid
+  organizationId    String                 @map("organization_id") @db.Uuid
+  conversationId    String                 @map("conversation_id") @db.Uuid
+  participantId     String                 @map("participant_id")
+  actionType        String                 @map("action_type")
+  status            AIActionProposalStatus @default(PENDING)
+  authoritativeData Json                   @map("authoritative_data")
+  executionArgs     Json                   @map("execution_args")
+  confirmationHash  String                 @map("confirmation_hash")
+  expiresAt         DateTime               @map("expires_at") @db.Timestamptz(6)
+  confirmedAt       DateTime?              @map("confirmed_at") @db.Timestamptz(6)
+  executedAt        DateTime?              @map("executed_at") @db.Timestamptz(6)
+  result            Json?
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, participantId, status])
+  @@index([expiresAt])
+  @@map("ai_action_proposals")
+}
+
+model ScheduleInsight {
+  id                    String                @id @default(uuid()) @db.Uuid
+  organizationId        String                @map("organization_id") @db.Uuid
+  locationId            String                @map("location_id") @db.Uuid
+  staffId               String?               @map("staff_id") @db.Uuid
+  serviceId             String?               @map("service_id") @db.Uuid
+  startAt               DateTime              @map("start_at") @db.Timestamptz(6)
+  endAt                 DateTime              @map("end_at") @db.Timestamptz(6)
+  gapDurationMin        Int                   @map("gap_duration_min")
+  potentialRevenueCents Int                   @default(0) @map("potential_revenue_cents")
+  candidateMatches      Json                  @default("[]") @map("candidate_matches")
+  aiExplanation         String?               @map("ai_explanation")
+  status                ScheduleInsightStatus @default(ACTIVE)
+  dedupKey              String                @map("dedup_key")
+  actionedAt            DateTime?             @map("actioned_at") @db.Timestamptz(6)
+  actionedOfferId       String?               @map("actioned_offer_id") @db.Uuid
+  dismissedAt           DateTime?             @map("dismissed_at") @db.Timestamptz(6)
+  dismissedBy           String?               @map("dismissed_by")
+  staleAt               DateTime?             @map("stale_at") @db.Timestamptz(6)
+  metadata              Json?
+  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location     Location        @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  staff        StaffProfile?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  service      Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  offers       WaitlistOffer[]
+
+  @@unique([organizationId, dedupKey, status])
+  @@index([organizationId, status, startAt])
+  @@index([locationId, staffId])
+  @@map("schedule_insights")
+}
+
+model OrgDailyMetric {
+  id                            String   @id @default(uuid()) @db.Uuid
+  organizationId                String   @map("organization_id") @db.Uuid
+  date                          DateTime @db.Date
+  currency                      String   @default("USD")
+  bookedRevenueCents            Int      @default(0) @map("booked_revenue_cents")
+  collectedRevenueCents         Int      @default(0) @map("collected_revenue_cents")
+  refundedRevenueCents          Int      @default(0) @map("refunded_revenue_cents")
+  netCollectedRevenueCents      Int      @default(0) @map("net_collected_revenue_cents")
+  bookingCount                  Int      @default(0) @map("booking_count")
+  completedCount                Int      @default(0) @map("completed_count")
+  cancelledCount                Int      @default(0) @map("cancelled_count")
+  noShowCount                   Int      @default(0) @map("no_show_count")
+  totalAvailableMinutes         Int      @default(0) @map("total_available_minutes")
+  totalBookedMinutes            Int      @default(0) @map("total_booked_minutes")
+  utilizationRate               Float    @default(0.0) @map("utilization_rate")
+  averageBookingValueCents      Int      @default(0) @map("average_booking_value_cents")
+  newCustomersCount             Int      @default(0) @map("new_customers_count")
+  returningCustomersCount       Int      @default(0) @map("returning_customers_count")
+  recoveredWaitlistRevenueCents Int      @default(0) @map("recovered_waitlist_revenue_cents")
+  createdAt                     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, date, currency])
+  @@index([organizationId, date])
+  @@map("org_daily_metrics")
+}
+
+model LocationDailyMetric {
+  id                    String   @id @default(uuid()) @db.Uuid
+  organizationId        String   @map("organization_id") @db.Uuid
+  locationId            String   @map("location_id") @db.Uuid
+  date                  DateTime @db.Date
+  currency              String   @default("USD")
+  bookedRevenueCents    Int      @default(0) @map("booked_revenue_cents")
+  collectedRevenueCents Int      @default(0) @map("collected_revenue_cents")
+  bookingCount          Int      @default(0) @map("booking_count")
+  completedCount        Int      @default(0) @map("completed_count")
+  cancelledCount        Int      @default(0) @map("cancelled_count")
+  noShowCount           Int      @default(0) @map("no_show_count")
+  totalAvailableMinutes Int      @default(0) @map("total_available_minutes")
+  totalBookedMinutes    Int      @default(0) @map("total_booked_minutes")
+  utilizationRate       Float    @default(0.0) @map("utilization_rate")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location     Location     @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, locationId, date, currency])
+  @@index([organizationId, date])
+  @@map("location_daily_metrics")
+}
+
+model StaffDailyMetric {
+  id                    String   @id @default(uuid()) @db.Uuid
+  organizationId        String   @map("organization_id") @db.Uuid
+  staffId               String   @map("staff_id") @db.Uuid
+  date                  DateTime @db.Date
+  currency              String   @default("USD")
+  bookedRevenueCents    Int      @default(0) @map("booked_revenue_cents")
+  collectedRevenueCents Int      @default(0) @map("collected_revenue_cents")
+  bookingCount          Int      @default(0) @map("booking_count")
+  completedCount        Int      @default(0) @map("completed_count")
+  cancelledCount        Int      @default(0) @map("cancelled_count")
+  noShowCount           Int      @default(0) @map("no_show_count")
+  totalAvailableMinutes Int      @default(0) @map("total_available_minutes")
+  totalBookedMinutes    Int      @default(0) @map("total_booked_minutes")
+  utilizationRate       Float    @default(0.0) @map("utilization_rate")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staff        StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, staffId, date, currency])
+  @@index([organizationId, date])
+  @@map("staff_daily_metrics")
+}
+
+model ServiceDailyMetric {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String   @map("organization_id") @db.Uuid
+  serviceId          String   @map("service_id") @db.Uuid
+  date               DateTime @db.Date
+  currency           String   @default("USD")
+  bookedRevenueCents Int      @default(0) @map("booked_revenue_cents")
+  bookingCount       Int      @default(0) @map("booking_count")
+  completedCount     Int      @default(0) @map("completed_count")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  service      Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, serviceId, date, currency])
+  @@index([organizationId, date])
+  @@map("service_daily_metrics")
+}
+
+model WaitlistDailyMetric {
+  id                    String   @id @default(uuid()) @db.Uuid
+  organizationId        String   @map("organization_id") @db.Uuid
+  date                  DateTime @db.Date
+  entriesCreated        Int      @default(0) @map("entries_created")
+  offersDispatched      Int      @default(0) @map("offers_dispatched")
+  offersAccepted        Int      @default(0) @map("offers_accepted")
+  recoveredRevenueCents Int      @default(0) @map("recovered_revenue_cents")
+  conversionRate        Float    @default(0.0) @map("conversion_rate")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, date])
+  @@index([organizationId, date])
+  @@map("waitlist_daily_metrics")
+}
+
+model Review {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  appointmentId  String       @unique @map("appointment_id") @db.Uuid
+  customerId     String       @map("customer_id") @db.Uuid
+  serviceId      String?      @map("service_id") @db.Uuid
+  staffId        String?      @map("staff_id") @db.Uuid
+  locationId     String?      @map("location_id") @db.Uuid
+  rating         Int // 1 to 5
+  comment        String?
+  status         ReviewStatus @default(PUBLISHED)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointment  Appointment   @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  service      Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  staff        StaffProfile? @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  location     Location?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([organizationId, staffId])
+  @@index([organizationId, serviceId])
+  @@map("reviews")
+}
+
+model StaffAttendance {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @map("organization_id") @db.Uuid
+  staffId         String           @map("staff_id") @db.Uuid
+  locationId      String?          @map("location_id") @db.Uuid
+  shiftDate       DateTime         @map("shift_date") @db.Date
+  checkInAt       DateTime         @map("check_in_at") @db.Timestamptz(6)
+  checkOutAt      DateTime?        @map("check_out_at") @db.Timestamptz(6)
+  status          AttendanceStatus @default(ON_TIME)
+  latenessMinutes Int              @default(0) @map("lateness_minutes")
+  managerNotes    String?          @map("manager_notes")
+  correctedBy     String?          @map("corrected_by") @db.Uuid
+  correctedAt     DateTime?        @map("corrected_at") @db.Timestamptz(6)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staff        StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  location     Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, shiftDate])
+  @@index([organizationId, staffId, shiftDate])
+  @@map("staff_attendance")
+}
+
+model DataExport {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  requestedBy    String       @map("requested_by") @db.Uuid
+  exportType     ExportType   @map("export_type")
+  status         ExportStatus @default(PENDING)
+  filters        Json?
+  fileKey        String?      @map("file_key")
+  fileUrl        String?      @map("file_url")
+  fileSizeBytes  Int?         @map("file_size_bytes")
+  rowCount       Int?         @map("row_count")
+  expiresAt      DateTime?    @map("expires_at") @db.Timestamptz(6)
+  error          String?
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt    DateTime?    @map("completed_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("data_exports")
+}
+
+model ProductAnalyticsEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  eventType      String   @map("event_type")
+  actorType      String   @map("actor_type") // CUSTOMER, STAFF, ANONYMOUS, SYSTEM
+  actorId        String?  @map("actor_id")
+  sessionId      String?  @map("session_id")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, eventType, createdAt])
+  @@map("product_analytics_events")
+}
+
+model IndustryTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique
+  name        String
+  description String
+  icon        String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("industry_templates")
+}

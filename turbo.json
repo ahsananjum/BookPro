@@ -1,0 +1,45 @@
+{
+    "$schema": "https://turbo.build/schema.json",
+    "globalDependencies": [
+        ".env",
+        ".env.local",
+        ".env.example"
+    ],
+    "globalEnv": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "PORT",
+        "NEXT_PUBLIC_API_URL"
+    ],
+    "pipeline": {
+        "build": {
+            "dependsOn": [
+                "^build"
+            ],
+            "outputs": [
+                ".next/**",
+                "!-next/cache/**",
+                "dist/**"
+            ]
+        },
+        "lint": {},
+        "typecheck": {},
+        "test": {
+            "dependsOn": [
+                "^build"
+            ],
+            "outputs": []
+        },
+        "test:integration": {
+            "dependsOn": [
+                "^build"
+            ],
+            "outputs": []
+        },
+        "dev": {
+            "cache": false,
+            "persistent": true
+        }
+    }
+}

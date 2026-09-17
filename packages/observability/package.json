@@ -1,0 +1,22 @@
+{
+    "name": "@bookpro/observability",
+    "version": "0.1.0",
+    "private": true,
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint \"src/**/*.ts\""
+    },
+    "dependencies": {
+        "@bookpro/contracts": "workspace:*",
+        "@nestjs/common": "^10.3.3",
+        "@nestjs/terminus": "^10.2.0"
+    },
+    "devDependencies": {
+        "@bookpro/tsconfig": "workspace:*",
+        "@bookpro/eslint-config": "workspace:*",
+        "typescript": "^5.3.3"
+    }
+}
