@@ -1,6 +1,6 @@
 {
     "version": 2,
-    "buildCommand": "pnpm --filter @bookpro/web build",
+    "buildCommand": "cd ../.. && pnpm exec turbo run build --filter=@bookpro/web...",
     "outputDirectory": ".next",
     "framework": "nextjs"
 }
