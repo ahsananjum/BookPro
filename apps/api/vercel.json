@@ -1,6 +1,6 @@
 {
     "version": 2,
-    "buildCommand": "cd ../.. && pnpm prisma generate --schema=prisma/schema.prisma && pnpm exec turbo run build --filter=@bookpro/api...",
+    "buildCommand": "cd ../.. && pnpm prisma generate --schema=prisma/schema.prisma && pnpm exec turbo run build",
     "outputDirectory": "dist",
     "rewrites": [
         {
