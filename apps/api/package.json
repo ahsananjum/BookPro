@@ -41,6 +41,7 @@
         "@bookpro/eslint-config": "workspace:*",
         "@bookpro/test-utils": "workspace:*",
         "@bookpro/tsconfig": "workspace:*",
+        "dotenv": "^16.4.5",
         "@nestjs/cli": "^10.3.2",
         "@nestjs/schematics": "^10.1.1",
         "@nestjs/testing": "^10.3.3",
