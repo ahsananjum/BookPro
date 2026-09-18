@@ -44,6 +44,7 @@ import { PlatformAdminModule } from "./modules/platform-admin/platform-admin.mod
 import { ReferenceModule } from "./modules/reference/reference.module";
 import { CustomerPortalModule } from "./modules/customer-portal/customer-portal.module";
 import { MarketingModule } from "./modules/marketing/marketing.module";
+import { CronModule } from "./modules/cron/cron.module";
 
 @Module({
     imports: [
@@ -94,6 +95,7 @@ import { MarketingModule } from "./modules/marketing/marketing.module";
         PlatformAdminModule,
         CustomerPortalModule,
         MarketingModule,
+        CronModule,
     ],
     providers: [
         {

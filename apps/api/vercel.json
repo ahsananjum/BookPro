@@ -1,0 +1,17 @@
+{
+    "version": 2,
+    "buildCommand": "cd ../.. && pnpm prisma generate --schema=prisma/schema.prisma && pnpm exec turbo run build --filter=@bookpro/api...",
+    "outputDirectory": "dist",
+    "rewrites": [
+        {
+            "source": "/(.*)",
+            "destination": "/api"
+        }
+    ],
+    "crons": [
+        {
+            "path": "/api/v1/cron/worker",
+            "schedule": "* * * * *"
+        }
+    ]
+}
