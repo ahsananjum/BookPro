@@ -28,6 +28,7 @@ logs/
 *.log
 
 # Testing & Coverage
+tests/
 coverage/
 .nyc_output/
 playwright-report/
