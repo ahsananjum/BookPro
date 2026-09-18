@@ -48,9 +48,6 @@ importers:
       '@bookpro/validation':
         specifier: workspace:*
         version: link:../../packages/validation
-      '@bookpro/worker':
-        specifier: workspace:*
-        version: link:../worker
       '@nestjs/bullmq':
         specifier: ^11.0.5
         version: 11.0.5(@nestjs/common@10.4.22)(@nestjs/core@10.4.22)(bullmq@5.81.3)

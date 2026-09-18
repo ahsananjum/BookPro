@@ -18,7 +18,6 @@
         "@bookpro/observability": "workspace:*",
         "@bookpro/server-core": "workspace:*",
         "@bookpro/validation": "workspace:*",
-        "@bookpro/worker": "workspace:*",
         "@nestjs/bullmq": "^11.0.5",
         "@nestjs/common": "^10.3.3",
         "@nestjs/core": "^10.3.3",
