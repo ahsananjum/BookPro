@@ -11,5 +11,18 @@
     "sourceMap": true,
     "skipLibCheck": true,
     "strict": false
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "**/node_modules",
+    "dist",
+    "**/dist",
+    "test",
+    "**/test",
+    "**/test/**",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "apps/worker",
+    "apps/worker/**"
+  ]
 }

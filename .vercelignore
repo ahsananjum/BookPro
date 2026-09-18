@@ -1,0 +1,8 @@
+apps/api/test
+apps/api/test/**
+apps/worker
+apps/worker/**
+**/test/**
+**/*.spec.ts
+**/*.test.ts
+*.log
