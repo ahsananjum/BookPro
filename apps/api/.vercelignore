@@ -1,4 +1,5 @@
-test/
+test
+test/**
 **/*.spec.ts
 **/*.test.ts
 startup.log

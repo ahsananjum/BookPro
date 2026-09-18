@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import { NotificationService } from "../notifications/notification.service";
 import { CalendarOutboundSyncService } from "../calendar/calendar-outbound-sync.service";
@@ -21,9 +21,9 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
     constructor(
         private readonly prisma: PrismaService,
         private readonly notificationService: NotificationService,
-        @Optional() private readonly calendarOutboundSync?: CalendarOutboundSyncService,
-        @Optional() private readonly calendarInboundSync?: CalendarInboundSyncService,
-        @Optional() private readonly redisService?: RedisService,
+        private readonly calendarOutboundSync?: CalendarOutboundSyncService,
+        private readonly calendarInboundSync?: CalendarInboundSyncService,
+        private readonly redisService?: RedisService,
     ) { }
 
     onModuleInit() {
