@@ -10,7 +10,7 @@
         "lint": "eslint \"src/**/*.ts\"",
         "typecheck": "tsc --noEmit",
         "test": "jest",
-        "test:integration": "jest --config test/jest-integration.json"
+        "test:integration": "jest --config ../../tests/api/jest-integration.json"
     },
     "dependencies": {
         "@bookpro/config": "workspace:*",
