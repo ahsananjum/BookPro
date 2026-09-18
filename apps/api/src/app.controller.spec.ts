@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { HealthController } from "./health/health.controller";
+import { HealthController } from "./modules/health/health.controller";
 import { HealthCheckService } from "@nestjs/terminus";
 import { SystemHealthIndicator } from "@bookpro/observability";
 
