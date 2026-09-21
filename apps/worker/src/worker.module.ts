@@ -1,5 +1,4 @@
 import { Module } from "@nestjs/common";
-import { HealthController } from "./health/health.controller";
 import { HealthService } from "./health/health.service";
 import { DatabaseModule } from "./database/database.module";
 import { PrismaService } from "./database/prisma.service";
@@ -19,7 +18,7 @@ import { CALENDAR_PROVIDER, GoogleCalendarAdapter, RedisService } from "@bookpro
 
 @Module({
     imports: [DatabaseModule],
-    controllers: [HealthController],
+    controllers: [],
     providers: [
         HealthService,
         NotificationTemplateEngineService,
