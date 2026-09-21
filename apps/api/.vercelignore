@@ -7,3 +7,7 @@ startup.log
 ../worker/**
 ../../apps/worker
 ../../apps/worker/**
+../web
+../web/**
+../../apps/web
+../../apps/web/**
