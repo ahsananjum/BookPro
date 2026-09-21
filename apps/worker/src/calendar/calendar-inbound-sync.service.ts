@@ -6,9 +6,11 @@ import { CALENDAR_PROVIDER, CalendarProvider, EncryptionService, RedisService } 
 export class CalendarInboundSyncService {
     private readonly logger = new Logger(CalendarInboundSyncService.name);
 
+    @Inject(CALENDAR_PROVIDER)
+    private readonly calendarProvider!: CalendarProvider;
+
     constructor(
         private readonly prisma: PrismaService,
-        @Inject(CALENDAR_PROVIDER) private readonly calendarProvider: CalendarProvider,
         private readonly redisService?: RedisService,
     ) { }
 
