@@ -6,8 +6,8 @@
     "types": "dist/index.d.ts",
     "scripts": {
         "build": "tsc",
-        "dev": "ts-node --transpile-only src/main.ts",
-        "start": "node dist/main.js",
+        "dev": "ts-node --transpile-only src/worker.ts",
+        "start": "node dist/worker.js",
         "lint": "eslint \"src/**/*.ts\"",
         "typecheck": "tsc --noEmit",
         "test": "jest --config jest.config.cjs"

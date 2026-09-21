@@ -11,4 +11,4 @@ ENV NODE_ENV=production
 COPY --from=builder /app/apps/worker/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 EXPOSE 4001
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/worker.js"]
