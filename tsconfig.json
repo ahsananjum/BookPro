@@ -12,17 +12,23 @@
     "skipLibCheck": true,
     "strict": false
   },
+  "include": [
+    "apps/api/src/**/*"
+  ],
   "exclude": [
     "node_modules",
     "**/node_modules",
     "dist",
     "**/dist",
-    "test",
-    "**/test",
-    "**/test/**",
-    "**/*.spec.ts",
-    "**/*.test.ts",
+    "apps/web",
+    "apps/web/**",
     "apps/worker",
-    "apps/worker/**"
+    "apps/worker/**",
+    "packages/ui",
+    "packages/ui/**",
+    "tests",
+    "tests/**",
+    "**/*.spec.ts",
+    "**/*.test.ts"
   ]
 }
