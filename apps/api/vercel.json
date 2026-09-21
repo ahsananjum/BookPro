@@ -1,7 +1,7 @@
 {
     "version": 2,
     "framework": null,
-    "buildCommand": "cd ../.. && pnpm run db:generate && pnpm turbo run build --filter=@bookpro/api...",
+    "buildCommand": "cd ../.. && npx prisma generate --schema=prisma/schema.prisma && npx turbo run build --filter=@bookpro/api...",
     "outputDirectory": "dist",
     "functions": {
         "api/index.js": {
