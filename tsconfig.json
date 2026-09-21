@@ -10,9 +10,12 @@
     "target": "ES2022",
     "sourceMap": true,
     "skipLibCheck": true,
-    "strict": false
+    "strict": false,
+    "moduleResolution": "node",
+    "esModuleInterop": true
   },
   "include": [
+    "src/**/*",
     "apps/api/src/**/*",
     "apps/worker/src/**/*"
   ],

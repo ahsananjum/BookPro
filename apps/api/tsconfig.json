@@ -18,7 +18,8 @@
     "strictBindCallApply": true,
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
-    "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo"
+    "moduleResolution": "node",
+    "esModuleInterop": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test/**/*", "**/*.spec.ts"]
