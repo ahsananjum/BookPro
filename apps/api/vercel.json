@@ -1,5 +1,6 @@
 {
     "version": 2,
+    "framework": null,
     "buildCommand": "cd ../.. && pnpm prisma generate --schema=prisma/schema.prisma && pnpm exec turbo run build",
     "outputDirectory": "dist",
     "functions": {
