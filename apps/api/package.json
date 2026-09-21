@@ -29,6 +29,7 @@
         "@types/ioredis": "^5.0.0",
         "bcryptjs": "^3.0.3",
         "bullmq": "^5.1.5",
+        "express": "^4.19.2",
         "ioredis": "^6.0.0",
         "jsonwebtoken": "^9.0.3",
         "reflect-metadata": "^0.2.1",
