@@ -3,3 +3,7 @@ test/**
 **/*.spec.ts
 **/*.test.ts
 startup.log
+../worker
+../worker/**
+../../apps/worker
+../../apps/worker/**

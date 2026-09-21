@@ -10,15 +10,11 @@ import { RetryClassifier, EncryptionService } from "@bookpro/server-core";
 export class NotificationService {
     private readonly logger = new Logger(NotificationService.name);
 
-    @Inject(EMAIL_PROVIDER)
-    private readonly emailProvider!: EmailProvider;
-
-    @Inject(SMS_PROVIDER)
-    private readonly smsProvider!: SmsProvider;
-
     constructor(
         private readonly prisma: PrismaService,
         private readonly templateEngine: NotificationTemplateEngineService,
+        @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
+        @Inject(SMS_PROVIDER) private readonly smsProvider: SmsProvider,
     ) { }
 
     /**

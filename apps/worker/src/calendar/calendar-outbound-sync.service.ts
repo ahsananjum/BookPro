@@ -6,11 +6,9 @@ import { CALENDAR_PROVIDER, CalendarProvider, EncryptionService, RetryClassifier
 export class CalendarOutboundSyncService {
     private readonly logger = new Logger(CalendarOutboundSyncService.name);
 
-    @Inject(CALENDAR_PROVIDER)
-    private readonly calendarProvider!: CalendarProvider;
-
     constructor(
         private readonly prisma: PrismaService,
+        @Inject(CALENDAR_PROVIDER) private readonly calendarProvider: CalendarProvider,
     ) { }
 
     private async getValidAccessToken(connection: any): Promise<string> {

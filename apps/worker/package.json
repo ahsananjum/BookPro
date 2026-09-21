@@ -2,8 +2,7 @@
     "name": "@bookpro/worker",
     "version": "0.1.0",
     "private": true,
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
+    "main": "dist/worker.js",
     "scripts": {
         "build": "tsc",
         "dev": "ts-node --transpile-only src/worker.ts",
