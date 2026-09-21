@@ -13,7 +13,8 @@
     "strict": false
   },
   "include": [
-    "apps/api/src/**/*"
+    "apps/api/src/**/*",
+    "apps/worker/src/**/*"
   ],
   "exclude": [
     "node_modules",
@@ -22,8 +23,6 @@
     "**/dist",
     "apps/web",
     "apps/web/**",
-    "apps/worker",
-    "apps/worker/**",
     "packages/ui",
     "packages/ui/**",
     "tests",
