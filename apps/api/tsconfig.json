@@ -19,7 +19,8 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "node",
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "types": ["node", "jest", "express"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test/**/*", "**/*.spec.ts"]

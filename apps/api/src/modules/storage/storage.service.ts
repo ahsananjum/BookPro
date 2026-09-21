@@ -6,13 +6,19 @@ import * as path from 'path';
 @Injectable()
 export class StorageService {
     private readonly logger = new Logger(StorageService.name);
-    private readonly uploadDir = path.join(process.cwd(), 'uploads');
+    private readonly uploadDir = process.env.VERCEL
+        ? path.join('/tmp', 'uploads')
+        : path.join(process.cwd(), 'uploads');
     private readonly supabaseUrl: string;
     private readonly supabaseKey: string;
 
     constructor(private readonly prisma: PrismaService) {
-        if (!fs.existsSync(this.uploadDir)) {
-            fs.mkdirSync(this.uploadDir, { recursive: true });
+        try {
+            if (!fs.existsSync(this.uploadDir)) {
+                fs.mkdirSync(this.uploadDir, { recursive: true });
+            }
+        } catch (err: any) {
+            this.logger.warn(`Could not initialize upload directory ${this.uploadDir}: ${err.message}`);
         }
         this.supabaseUrl = process.env.SUPABASE_URL || 'https://jpwulhupxanqopncnzzt.supabase.co';
         this.supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
@@ -47,15 +53,23 @@ export class StorageService {
 
         const safeOrgFolder = organizationId.replace(/[^a-zA-Z0-9_-]/g, '_');
         const orgFolder = path.join(this.uploadDir, safeOrgFolder);
-        if (!fs.existsSync(orgFolder)) {
-            fs.mkdirSync(orgFolder, { recursive: true });
+        try {
+            if (!fs.existsSync(orgFolder)) {
+                fs.mkdirSync(orgFolder, { recursive: true });
+            }
+        } catch (err: any) {
+            this.logger.warn(`Could not create org directory ${orgFolder}: ${err.message}`);
         }
 
         const ext = path.extname(fileName) || '.png';
         const randomKey = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}${ext}`;
         const filePath = path.join(orgFolder, randomKey);
 
-        fs.writeFileSync(filePath, fileBuffer);
+        try {
+            fs.writeFileSync(filePath, fileBuffer);
+        } catch (err: any) {
+            this.logger.warn(`Could not write local file ${filePath}: ${err.message}`);
+        }
 
         const storageKey = `${safeOrgFolder}/${randomKey}`;
         let publicUrl = `/api/v1/storage/files/${storageKey}`;
