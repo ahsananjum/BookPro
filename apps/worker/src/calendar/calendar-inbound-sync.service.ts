@@ -1,6 +1,6 @@
-import { Injectable, Logger, Inject } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
-import { CALENDAR_PROVIDER, CalendarProvider, EncryptionService, RedisService } from "@bookpro/server-core";
+import { CalendarProvider, EncryptionService, RedisService } from "@bookpro/server-core";
 
 @Injectable()
 export class CalendarInboundSyncService {
@@ -8,7 +8,7 @@ export class CalendarInboundSyncService {
 
     constructor(
         private readonly prisma: PrismaService,
-        @Inject(CALENDAR_PROVIDER) private readonly calendarProvider: CalendarProvider,
+        private readonly calendarProvider: CalendarProvider,
         private readonly redisService?: RedisService,
     ) { }
 

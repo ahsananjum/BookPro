@@ -1,8 +1,8 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import { NotificationTemplateEngineService } from "./template-engine.service";
-import { EMAIL_PROVIDER, EmailProvider } from "./providers/email.provider";
-import { SMS_PROVIDER, SmsProvider } from "./providers/sms.provider";
+import { EmailProvider } from "./providers/email.provider";
+import { SmsProvider } from "./providers/sms.provider";
 import { NotificationChannelType, NotificationStatusType } from "@bookpro/contracts";
 import { RetryClassifier, EncryptionService } from "@bookpro/server-core";
 
@@ -13,8 +13,8 @@ export class NotificationService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly templateEngine: NotificationTemplateEngineService,
-        @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
-        @Inject(SMS_PROVIDER) private readonly smsProvider: SmsProvider,
+        private readonly emailProvider: EmailProvider,
+        private readonly smsProvider: SmsProvider,
     ) { }
 
     /**

@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { HealthController } from "./health/health.controller";
 import { HealthService } from "./health/health.service";
 import { DatabaseModule } from "./database/database.module";
+import { PrismaService } from "./database/prisma.service";
 import { NotificationService } from "./notifications/notification.service";
 import { NotificationTemplateEngineService } from "./notifications/template-engine.service";
 import { EMAIL_PROVIDER, BrevoEmailProvider, DisabledEmailProvider } from "./notifications/providers/email.provider";
@@ -57,7 +58,16 @@ import { CALENDAR_PROVIDER, GoogleCalendarAdapter, RedisService } from "@bookpro
                 return disabled;
             },
         },
-        NotificationService,
+        {
+            provide: NotificationService,
+            inject: [PrismaService, NotificationTemplateEngineService, EMAIL_PROVIDER, SMS_PROVIDER],
+            useFactory: (
+                prisma: PrismaService,
+                templateEngine: NotificationTemplateEngineService,
+                emailProvider: any,
+                smsProvider: any,
+            ) => new NotificationService(prisma, templateEngine, emailProvider, smsProvider),
+        },
         OutboxDispatcherService,
         HoldJanitorService,
         WaitlistJanitorService,
@@ -69,8 +79,18 @@ import { CALENDAR_PROVIDER, GoogleCalendarAdapter, RedisService } from "@bookpro
             provide: CALENDAR_PROVIDER,
             useClass: GoogleCalendarAdapter,
         },
-        CalendarOutboundSyncService,
-        CalendarInboundSyncService,
+        {
+            provide: CalendarOutboundSyncService,
+            inject: [PrismaService, CALENDAR_PROVIDER],
+            useFactory: (prisma: PrismaService, calendarProvider: any) =>
+                new CalendarOutboundSyncService(prisma, calendarProvider),
+        },
+        {
+            provide: CalendarInboundSyncService,
+            inject: [PrismaService, CALENDAR_PROVIDER, RedisService],
+            useFactory: (prisma: PrismaService, calendarProvider: any, redisService: RedisService) =>
+                new CalendarInboundSyncService(prisma, calendarProvider, redisService),
+        },
         RedisService,
     ],
     exports: [
