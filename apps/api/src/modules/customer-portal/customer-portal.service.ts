@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import * as crypto from "crypto";
 import {
   ActorType,
@@ -12,12 +12,16 @@ import {
 import { EncryptionService } from "@bookpro/server-core";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service";
+import { OutboxService } from "../outbox/outbox.service";
 
 @Injectable()
 export class CustomerPortalService {
   private readonly logger = new Logger(CustomerPortalService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly outboxService?: OutboxService,
+  ) {}
 
   /**
    * Runs an operation inside a serializable transaction with safe retry on serialization conflict (P2034).
@@ -246,6 +250,9 @@ export class CustomerPortalService {
 
       return created;
     });
+    if (this.outboxService) {
+      await this.outboxService.drainImmediate();
+    }
 
     return { id: invitation.id, email: invitation.email, expiresAt };
   }
@@ -472,7 +479,7 @@ export class CustomerPortalService {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const normalizedEmail = existing.email.trim().toLowerCase();
 
-    return this.runSerializable(async (tx) => {
+    const result = await this.runSerializable(async (tx) => {
       // Revoke the old invitation atomically if not already revoked
       if (existing.status !== "REVOKED") {
         await tx.customerInvitation.update({
@@ -519,6 +526,10 @@ export class CustomerPortalService {
 
       return { id: created.id, email: created.email, expiresAt };
     });
+    if (this.outboxService) {
+      await this.outboxService.drainImmediate();
+    }
+    return result;
   }
 
   async acceptInvite(dto: { token: string; consentMarketing: boolean }, ctx: RequestContext) {

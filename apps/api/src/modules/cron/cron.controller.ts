@@ -26,6 +26,7 @@ export class CronController {
     }
 
     @Public()
+    @Get("drain-outbox")
     @Post("drain-outbox")
     async drainOutbox(@Headers("authorization") authHeader?: string) {
         const cronSecret = process.env.CRON_SECRET;

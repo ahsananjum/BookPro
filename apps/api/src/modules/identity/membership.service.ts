@@ -1,13 +1,17 @@
-import { Injectable, BadRequestException, NotFoundException } from "@nestjs/common";
+import { Injectable, Optional, BadRequestException, NotFoundException } from "@nestjs/common";
 import * as crypto from "crypto";
 import { PrismaService } from "../database/prisma.service";
+import { OutboxService } from "../outbox/outbox.service";
 import { InviteUserDto, ChangeRoleDto } from "@bookpro/validation";
 import { RequestContext, ActorType } from "@bookpro/contracts";
 import { EncryptionService } from "@bookpro/server-core";
 
 @Injectable()
 export class MembershipService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        @Optional() private readonly outboxService?: OutboxService,
+    ) { }
 
     async inviteUser(dto: InviteUserDto, ctx: RequestContext) {
         if (!ctx.organizationId) {
@@ -43,6 +47,9 @@ export class MembershipService {
             await tx.outboxEvent.create({ data: { organizationId: ctx.organizationId!, aggregateType: "Invitation", aggregateId: created.id, eventType: "identity.staff_invitation_requested", payload: { invitationId: created.id, recipientEmail: created.email, encryptedInvitationToken, expiresAt: expiresAt.toISOString() } } });
             return created;
         });
+        if (this.outboxService) {
+            await this.outboxService.drainImmediate();
+        }
 
         const { tokenHash: _tokenHash, ...safeInvitation } = invitation;
         return safeInvitation;

@@ -40,6 +40,19 @@ export class OutboxService {
     }
 
     /**
+     * Awaits an immediate drain cycle (vital for Serverless lambdas before response return)
+     */
+    public async drainImmediate(): Promise<void> {
+        if (this.processorCallback) {
+            try {
+                await this.processorCallback();
+            } catch (err: any) {
+                this.logger.warn(`Immediate outbox drain warning: ${err.message}`);
+            }
+        }
+    }
+
+    /**
      * Inserts an outbox event record inside an existing Prisma database transaction
      */
     async emitInTx(

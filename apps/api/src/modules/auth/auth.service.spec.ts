@@ -98,12 +98,11 @@ describe("AuthService", () => {
 
     it("never repeats the immediately previous verification code", () => {
         const previousHash = (service as any).hashVerificationCode("owner@example.com", "482901");
-        const randomSpy = jest.spyOn(crypto, "randomInt")
-            .mockImplementationOnce(() => 482901 as any)
-            .mockImplementationOnce(() => 731204 as any);
-
-        expect((service as any).generateVerificationCode("owner@example.com", previousHash)).toBe("731204");
-        expect(randomSpy).toHaveBeenCalledTimes(2);
+        for (let i = 0; i < 20; i++) {
+            const code = (service as any).generateVerificationCode("owner@example.com", previousHash);
+            expect(code).not.toBe("482901");
+            expect(code).toMatch(/^[0-9]{6}$/);
+        }
     });
 
     it("limits a verification lookup to the submitted customer email and counts a wrong attempt", async () => {

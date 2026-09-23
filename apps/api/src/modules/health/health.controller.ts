@@ -27,7 +27,19 @@ export class HealthController {
 
     @Get("readiness")
     readiness() {
-        return { status: "ready", services: { db: true, redis: true } };
+        const hasBrevoKey = !!process.env.BREVO_API_KEY;
+        return {
+            status: "ready",
+            services: {
+                db: true,
+                redis: true,
+                email: {
+                    provider: "brevo",
+                    configured: hasBrevoKey,
+                    sender: process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || "ahsananjum170@gmail.com",
+                },
+            },
+        };
     }
 
     @Get("test-error")

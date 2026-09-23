@@ -805,12 +805,12 @@ export class CronService implements OnModuleInit {
         const apiKey = process.env.BREVO_API_KEY;
         const senderRaw = process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || "ahsananjum170@gmail.com";
         if (!apiKey) {
-            this.logger.warn("Brevo API key not configured. Skipping email dispatch.");
-            return null;
+            this.logger.error("BREVO_API_KEY environment variable is not configured. Cannot dispatch email.");
+            throw new Error("BREVO_API_KEY environment variable is not configured");
         }
 
         const cleanSender = senderRaw.includes("<") ? senderRaw.split("<")[1].replace(">", "").trim() : senderRaw.trim();
-        this.logger.log(`Dispatching transactional email via Brevo to ${to}...`);
+        this.logger.log(`Dispatching transactional email via Brevo to ${to} (Sender: ${cleanSender})...`);
 
         const response = await fetch("https://api.brevo.com/v3/smtp/email", {
             method: "POST",
@@ -832,11 +832,12 @@ export class CronService implements OnModuleInit {
 
         if (!response.ok) {
             const errText = await response.text();
+            this.logger.error(`Brevo API error (${response.status}): ${errText}`);
             throw new Error(`Brevo API error (${response.status}): ${errText}`);
         }
 
         const data: any = await response.json();
-        this.logger.log(`Brevo email dispatched successfully (Message ID: ${data.messageId})`);
+        this.logger.log(`Brevo email dispatched successfully to ${to} (Message ID: ${data.messageId})`);
         return data.messageId || null;
     }
 }

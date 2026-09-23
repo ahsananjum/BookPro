@@ -1,9 +1,10 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, ConflictException, HttpException, HttpStatus } from "@nestjs/common";
+import { Injectable, Optional, UnauthorizedException, BadRequestException, NotFoundException, ConflictException, HttpException, HttpStatus } from "@nestjs/common";
 import * as jwt from "jsonwebtoken";
 import * as bcrypt from "bcryptjs";
 import * as crypto from "crypto";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service";
+import { OutboxService } from "../outbox/outbox.service";
 import { LoginDto, AcceptInviteDto, RegisterBusinessDto, RegisterCustomerDto } from "@bookpro/validation";
 import { DEFAULT_ROLE_PERMISSIONS, PermissionKey, RoleCode, ActorType, RequestContext } from "@bookpro/contracts";
 import { EncryptionService } from "@bookpro/server-core";
@@ -50,7 +51,10 @@ export class AuthService {
     private readonly jwtExpiresInMs = parseDurationToMs(process.env.JWT_EXPIRES_IN || "7d", 7 * 24 * 60 * 60 * 1000);
     private readonly refreshLifetimeMs = parseDurationToMs(process.env.SESSION_EXPIRES_IN || "30d", 30 * 24 * 60 * 60 * 1000);
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        @Optional() private readonly outboxService?: OutboxService,
+    ) { }
 
     getJwtExpiresIn(): string {
         return this.jwtExpiresIn;
@@ -281,6 +285,10 @@ export class AuthService {
             throw error;
         }
 
+        if (this.outboxService) {
+            await this.outboxService.drainImmediate();
+        }
+
         return {
             status: "VERIFICATION_REQUIRED" as const,
             email: result.user.email,
@@ -306,6 +314,9 @@ export class AuthService {
             await tx.emailVerificationToken.create({ data: { userId: user.id, organizationId: null, tokenHash, expiresAt: new Date(Date.now() + 15 * 60 * 1000) } });
             await tx.outboxEvent.create({ data: { organizationId: null, aggregateType: "User", aggregateId: user.id, eventType: "identity.email_verification_requested", payload: { userId: user.id, recipientEmail: normalizedEmail, fullName: user.fullName, verificationCode: rawVerificationCode } } });
         });
+        if (this.outboxService) {
+            await this.outboxService.drainImmediate();
+        }
         return { status: "VERIFICATION_REQUIRED" as const, email: normalizedEmail };
     }
 
@@ -432,6 +443,10 @@ export class AuthService {
                 },
             });
         });
+
+        if (this.outboxService) {
+            await this.outboxService.drainImmediate();
+        }
 
         return {
             success: true,
