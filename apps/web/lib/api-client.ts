@@ -43,7 +43,12 @@ async function requestTokenRefresh(baseUrl: string, correlationId: string): Prom
 }
 
 async function apiFetchInternal<T>(endpoint: string, options: RequestInit, orgId: string | undefined, mayRefresh: boolean): Promise<ApiResponseEnvelope<T>> {
-    const baseUrl = typeof window !== "undefined" ? "/api/v1" : (process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/api/v1");
+    const defaultServerApi = process.env.NODE_ENV === "production"
+        ? "https://bookpro-backend.vercel.app/api/v1"
+        : "http://127.0.0.1:4000/api/v1";
+    const baseUrl = typeof window !== "undefined"
+        ? "/api/v1"
+        : (process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || defaultServerApi);
     let url: string;
     if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
         url = endpoint;

@@ -19,10 +19,14 @@ const nextConfig = {
         ];
     },
     async rewrites() {
+        const defaultApi = process.env.NODE_ENV === "production"
+            ? "https://bookpro-backend.vercel.app/api/v1"
+            : "http://127.0.0.1:4000/api/v1";
+        const targetApi = (process.env.API_INTERNAL_URL || defaultApi).replace(/\/$/, "");
         return [
             {
                 source: "/api/v1/:path*",
-                destination: `${process.env.API_INTERNAL_URL || "http://127.0.0.1:4000/api/v1"}/:path*`,
+                destination: `${targetApi}/:path*`,
             },
         ];
     },
@@ -30,7 +34,7 @@ const nextConfig = {
         return [{
             source: "/(.*)",
             headers: [
-                { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://*.stripe.com; frame-src 'self' https://js.stripe.com https://*.stripe.com; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://api.stripe.com https://*.stripe.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self' https://checkout.stripe.com; object-src 'none'" },
+                { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://*.stripe.com; frame-src 'self' https://js.stripe.com https://*.stripe.com; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://bookpro-backend.vercel.app https://*.vercel.app https://api.stripe.com https://*.stripe.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self' https://checkout.stripe.com; object-src 'none'" },
                 { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
                 { key: "X-Content-Type-Options", value: "nosniff" },
                 { key: "X-Frame-Options", value: "DENY" },

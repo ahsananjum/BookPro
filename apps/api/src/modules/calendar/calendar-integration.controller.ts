@@ -91,12 +91,13 @@ export class CalendarIntegrationController {
             throw new BadRequestException("Missing code or state in Google OAuth callback");
         }
 
+        const defaultWebUrl = process.env.NODE_ENV === "production" ? "https://bookpro-fawn.vercel.app" : "http://localhost:3000";
+        const webUrl = (process.env.WEB_URL || defaultWebUrl).replace(/\/$/, "");
+
         try {
             await this.oauthService.handleOAuthCallback(code, state);
-            const webUrl = process.env.WEB_URL || "http://localhost:3000";
             return res.redirect(`${webUrl}/app/integrations/google?status=connected`);
         } catch (err: any) {
-            const webUrl = process.env.WEB_URL || "http://localhost:3000";
             return res.redirect(`${webUrl}/app/integrations/google?error=connection_failed`);
         }
     }

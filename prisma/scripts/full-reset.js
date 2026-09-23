@@ -106,6 +106,8 @@ async function main() {
   await del('registration_requests');
   await del('auth_rate_limits');
   await del('google_oauth_states');  // not org-cascaded (no org FK)
+  await del('audit_logs');
+  await del('outbox_events');
 
   // Finally delete all users
   await del('users');
