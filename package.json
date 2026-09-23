@@ -13,6 +13,9 @@
     "db:generate": "prisma generate --schema=prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
     "db:seed": "node prisma/seed.js",
+    "db:check-counts": "node --env-file=.env prisma/scripts/db-test.js",
+    "db:reset-transactional": "node --env-file=.env prisma/scripts/reset-transactional-data.js",
+    "db:full-reset": "node --env-file=.env prisma/scripts/full-reset.js",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down"
   },

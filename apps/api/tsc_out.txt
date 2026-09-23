@@ -1,6 +1,0 @@
-src/modules/availability/effective-operating-window-builder.ts(60,25): error TS2339: Property 'isBeforeOrEqual' does not exist on type 'LocalTime'.
-src/modules/availability/resource-availability.service.ts(74,54): error TS18047: 'sr.resource' is possibly 'null'.
-src/modules/availability/run-availability-tests.ts(79,21): error TS2554: Expected 12 arguments, but got 7.
-src/modules/common/idempotency.service.ts(60,34): error TS2551: Property 'responseCode' does not exist on type '{ id: string; createdAt: Date; organizationId: string; expiresAt: Date; statusCode: number; responseBody: JsonValue; idempotencyKey: string; requestHash: string; }'. Did you mean 'responseBody'?
-src/modules/common/idempotency.service.ts(90,17): error TS2561: Object literal may only specify known properties, but 'responseCode' does not exist in type 'Without<IdempotencyRecordCreateInput, IdempotencyRecordUncheckedCreateInput> & IdempotencyRecordUncheckedCreateInput'. Did you mean to write 'responseBody'?
-src/modules/common/idempotency.service.ts(94,17): error TS2561: Object literal may only specify known properties, but 'responseCode' does not exist in type '(Without<IdempotencyRecordUpdateInput, IdempotencyRecordUncheckedUpdateInput> & IdempotencyRecordUncheckedUpdateInput) | (Without<...> & IdempotencyRecordUpdateInput)'. Did you mean to write 'responseBody'?

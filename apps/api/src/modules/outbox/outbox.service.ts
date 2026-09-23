@@ -15,8 +15,29 @@ export interface EmitOutboxEventInput {
 @Injectable()
 export class OutboxService {
     private readonly logger = new Logger(OutboxService.name);
+    private processorCallback?: () => Promise<any>;
 
     constructor(private readonly prisma: PrismaService) { }
+
+    /**
+     * Registers an asynchronous processor (e.g. CronService.processPendingOutbox) to drain outbox events immediately
+     */
+    public registerProcessor(callback: () => Promise<any>): void {
+        this.processorCallback = callback;
+    }
+
+    /**
+     * Triggers an immediate non-blocking drain cycle
+     */
+    public triggerDrain(): void {
+        if (this.processorCallback) {
+            setImmediate(() => {
+                this.processorCallback!().catch((err: any) => {
+                    this.logger.warn(`Immediate outbox drain warning: ${err.message}`);
+                });
+            });
+        }
+    }
 
     /**
      * Inserts an outbox event record inside an existing Prisma database transaction
@@ -42,6 +63,8 @@ export class OutboxService {
         this.logger.log(
             `Outbox event emitted in TX: ${input.aggregateType}.${input.eventType} [ID: ${input.aggregateId}, Org: ${organizationId || 'GLOBAL'}]`,
         );
+
+        this.triggerDrain();
     }
 
     /**
@@ -61,5 +84,7 @@ export class OutboxService {
                 status: 'PENDING',
             },
         });
+
+        this.triggerDrain();
     }
 }
