@@ -1648,6 +1648,12 @@ export default function PublicHomePage() {
             <Link href="/organizations" style={{ color: "#94a3b8", textDecoration: "none", fontWeight: 500 }}>
               Directory
             </Link>
+            <Link href="/privacy" style={{ color: "#94a3b8", textDecoration: "none", fontWeight: 500 }}>
+              Privacy
+            </Link>
+            <Link href="/terms" style={{ color: "#94a3b8", textDecoration: "none", fontWeight: 500 }}>
+              Terms
+            </Link>
             <Link href="/register/customer" style={{ color: "#c084fc", textDecoration: "none", fontWeight: 600 }}>
               Customer Registration
             </Link>

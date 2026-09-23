@@ -796,6 +796,14 @@ export function CustomerPortalShell({
               Directory
             </Link>
             <span>•</span>
+            <Link href="/privacy" style={{ color: "#94a3b8", textDecoration: "none" }}>
+              Privacy
+            </Link>
+            <span>•</span>
+            <Link href="/terms" style={{ color: "#94a3b8", textDecoration: "none" }}>
+              Terms
+            </Link>
+            <span>•</span>
             <Link href="/register" style={{ color: "#94a3b8", textDecoration: "none" }}>
               For Businesses
             </Link>
