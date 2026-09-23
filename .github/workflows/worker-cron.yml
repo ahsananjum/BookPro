@@ -1,0 +1,28 @@
+name: Background Worker Cron
+
+on:
+  schedule:
+    # Runs every 5 minutes (GitHub Actions minimum schedule interval)
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Trigger Serverless Worker Sweep
+        run: |
+          BACKEND_URL="https://bookpro-backend.vercel.app/api/v1/cron/worker"
+          echo "Pinging $BACKEND_URL..."
+          if [ -n "${{ secrets.CRON_SECRET }}" ]; then
+            curl -s -f -X GET "$BACKEND_URL" \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              --retry 2 \
+              --max-time 30
+          else
+            curl -s -f -X GET "$BACKEND_URL" \
+              --retry 2 \
+              --max-time 30
+          fi
+          echo "Worker sweep successfully triggered."
