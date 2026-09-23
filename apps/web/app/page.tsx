@@ -22,6 +22,8 @@ import {
   Check,
   Activity,
   CheckCircle,
+  Menu,
+  X,
 } from "lucide-react";
 import { Globe, User, ArrowRight, ArrowLeft, Zap, Shield } from "../components/icons";
 import {
@@ -47,6 +49,7 @@ export default function PublicHomePage() {
   const [activeTab, setActiveTab] = useState(0);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const TABS = [
     { id: "roster", name: "Multi-Branch Roster", icon: Building2 },
@@ -148,11 +151,7 @@ export default function PublicHomePage() {
 
         <nav
           aria-label="Commercial navigation"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "20px",
-          }}
+          className="commercial-desktop-nav"
         >
           <a
             href="#architecture"
@@ -263,7 +262,145 @@ export default function PublicHomePage() {
             </Link>
           </motion.div>
         </nav>
+
+        {/* Mobile Hamburger Toggle Button */}
+        <button
+          type="button"
+          className="commercial-mobile-toggle"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-expanded={mobileMenuOpen}
+        >
+          {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+        </button>
       </motion.header>
+
+      {/* Mobile Hallmark Navigation Drawer */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            key="commercial-mobile-drawer"
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.22, ease: "easeInOut" }}
+            style={{
+              position: "fixed",
+              top: "69px",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 39,
+              backgroundColor: "rgba(7, 11, 18, 0.98)",
+              backdropFilter: "blur(24px)",
+              WebkitBackdropFilter: "blur(24px)",
+              padding: "20px 20px 40px",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+              borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {[
+                { label: "Architecture", href: "#architecture" },
+                { label: "Capabilities", href: "#capabilities" },
+                { label: "Portals", href: "#portals" },
+                { label: "Directory", href: "/organizations" },
+              ].map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  style={{
+                    padding: "14px 16px",
+                    borderRadius: "10px",
+                    backgroundColor: "rgba(255, 255, 255, 0.03)",
+                    border: "1px solid rgba(255, 255, 255, 0.06)",
+                    color: "#f8fafc",
+                    fontSize: "15px",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span>{item.label}</span>
+                  <ArrowRight size={16} color="#64748b" />
+                </a>
+              ))}
+            </div>
+
+            <div style={{ height: "1px", backgroundColor: "rgba(255, 255, 255, 0.08)", margin: "4px 0" }} />
+
+            <Link
+              href="/register/customer"
+              onClick={() => setMobileMenuOpen(false)}
+              style={{
+                padding: "14px 16px",
+                borderRadius: "10px",
+                backgroundColor: "rgba(124, 58, 237, 0.12)",
+                border: "1px solid rgba(168, 85, 247, 0.3)",
+                color: "#c084fc",
+                fontSize: "15px",
+                fontWeight: 700,
+                textDecoration: "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <User size={16} /> Customer Sign Up
+              </span>
+              <ArrowRight size={16} />
+            </Link>
+
+            <Link
+              href="/login"
+              onClick={() => setMobileMenuOpen(false)}
+              style={{
+                padding: "14px 16px",
+                borderRadius: "10px",
+                backgroundColor: "rgba(15, 23, 42, 0.8)",
+                border: "1px solid rgba(255, 255, 255, 0.14)",
+                color: "#f8fafc",
+                fontSize: "15px",
+                fontWeight: 650,
+                textDecoration: "none",
+                textAlign: "center",
+              }}
+            >
+              Sign in
+            </Link>
+
+            <Link
+              href="/register"
+              onClick={() => setMobileMenuOpen(false)}
+              style={{
+                padding: "14px 16px",
+                borderRadius: "10px",
+                background: "linear-gradient(135deg, #0284c7, #2563eb)",
+                color: "#ffffff",
+                fontSize: "15px",
+                fontWeight: 700,
+                textDecoration: "none",
+                textAlign: "center",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                boxShadow: "0 4px 16px rgba(2, 132, 199, 0.4)",
+              }}
+            >
+              <span>Create workspace</span>
+              <ArrowRight size={16} />
+            </Link>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Commercial Content */}
       <main
@@ -1523,6 +1660,56 @@ export default function PublicHomePage() {
           </div>
         </div>
       </footer>
+
+      {/* Sticky Mobile Conversion Dock */}
+      <div className="commercial-sticky-cta">
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <span style={{ fontSize: "11px", fontWeight: 750, color: "#38bdf8", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+            BookPro
+          </span>
+          <span style={{ fontSize: "12px", color: "#cbd5e1", fontWeight: 500 }}>
+            Deterministic Booking
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Link
+            href="/login"
+            style={{
+              padding: "7px 12px",
+              borderRadius: "8px",
+              backgroundColor: "rgba(15, 23, 42, 0.85)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              color: "#f8fafc",
+              fontSize: "13px",
+              fontWeight: 600,
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/register"
+            style={{
+              padding: "7px 14px",
+              borderRadius: "8px",
+              background: "linear-gradient(135deg, #0284c7, #2563eb)",
+              color: "#ffffff",
+              fontSize: "13px",
+              fontWeight: 700,
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              boxShadow: "0 2px 10px rgba(2, 132, 199, 0.4)",
+            }}
+          >
+            <span>Get Started</span>
+            <ArrowRight size={13} />
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

@@ -702,3 +702,29 @@
   line-height: 1.5;
   margin-bottom: 1.5rem;
 }
+
+/* Mobile Responsiveness & Touch Optimization */
+@media (max-width: 768px) {
+  .header {
+    padding: 0.75rem 1rem;
+  }
+  .mainLayout {
+    padding: 1rem 0.75rem 3rem;
+    gap: 1.25rem;
+  }
+  .workflowPanel, .summaryPanel {
+    padding: 1.25rem 1rem;
+    border-radius: 12px;
+  }
+  .summaryPanel {
+    position: static;
+    top: auto;
+  }
+  .stepperContainer {
+    padding: 0.5rem 0.75rem;
+  }
+  .slotsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+  }
+}
+

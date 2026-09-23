@@ -450,3 +450,80 @@ button:disabled { cursor: not-allowed; opacity: .58; }
   }
 }
 
+/* ==========================================================================
+   Mobile Optimization & Responsiveness Utilities
+   ========================================================================== */
+button, a, input, select, textarea {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 768px) {
+  /* Prevent automatic iOS Safari zoom on focus by ensuring font-size is at least 16px */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Commercial Landing Navigation & Mobile Drawer */
+.commercial-desktop-nav {
+  display: flex !important;
+  align-items: center;
+  gap: 20px;
+}
+
+.commercial-mobile-toggle {
+  display: none !important;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 40px;
+  transition: all 0.2s ease;
+}
+
+.commercial-mobile-toggle:hover,
+.commercial-mobile-toggle:focus-visible {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.commercial-sticky-cta {
+  display: none !important;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 35;
+  background: rgba(7, 11, 18, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10px 16px max(12px, env(safe-area-inset-bottom, 12px));
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6);
+}
+
+@media (max-width: 960px) {
+  .commercial-desktop-nav {
+    display: none !important;
+  }
+  .commercial-mobile-toggle {
+    display: inline-flex !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .commercial-sticky-cta {
+    display: flex !important;
+  }
+}
+
+

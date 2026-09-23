@@ -37,14 +37,14 @@ export default function NotFound() {
       />
 
       <div style={{ width: "100%", maxWidth: "520px", position: "relative", zIndex: 10 }}>
-        <Card glow style={{ textAlign: "center", padding: "3rem 2rem" }}>
+        <Card glow style={{ textAlign: "center", padding: "clamp(2rem, 5vw, 3rem) clamp(1rem, 4vw, 2rem)" }}>
           <div style={{ display: "inline-block", marginBottom: "1rem" }}>
             <Badge variant="warning">404 // ROUTE_NOT_FOUND</Badge>
           </div>
 
           <h1
             style={{
-              fontSize: "5rem",
+              fontSize: "clamp(3.5rem, 14vw, 5rem)",
               fontWeight: 900,
               letterSpacing: "-0.04em",
               lineHeight: 1,
