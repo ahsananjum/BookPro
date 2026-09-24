@@ -300,8 +300,8 @@ function CustomerAccountContent() {
         organization.id
       );
       if (res.success) {
-        setMarketingConsent(nextVal);
-        setConsentUpdatedAt(new Date().toISOString());
+        setMarketingConsent(Boolean(res.data?.consentMarketing ?? nextVal));
+        setConsentUpdatedAt(res.data?.consentMarketingAt || null);
         setActionMessage(
           nextVal
             ? "✓ Subscribed to studio exclusive offers & announcements."

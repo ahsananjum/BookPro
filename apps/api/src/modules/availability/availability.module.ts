@@ -44,6 +44,7 @@ import { AuthModule } from "../auth/auth.module";
         AvailabilityValidatorService,
         AuthoritativeAvailabilityValidatorService,
         BusyIntervalRepository,
+        PolicyResolver,
     ],
 })
 export class AvailabilityModule { }

@@ -477,9 +477,12 @@ function OnboardingWizard() {
             durationMin: serviceData.durationMin,
             priceCents: Math.round(priceNum * 100),
             currency: regionalSettings.currency || "USD",
-            postBufferMin: serviceData.bufferAfterMin || 0,
+            preBufferMin: serviceData.preBufferMin || 0,
+            postBufferMin: serviceData.postBufferMin ?? serviceData.bufferAfterMin ?? 0,
             depositType: serviceData.depositType,
             depositValue: serviceData.depositType !== "NONE" ? parseFloat(serviceData.depositValue) || 0 : 0,
+            taxBehavior: serviceData.taxBehavior || "EXCLUSIVE",
+            capacity: serviceData.capacity || 1,
             eligibleLocationIds: locationId ? [locationId] : undefined,
         };
 

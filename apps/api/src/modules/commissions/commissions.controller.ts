@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, ForbiddenExcept
 import { ReqContext, RequirePermissions } from "@bookpro/server-core";
 import { PermissionKey, RequestContext } from "@bookpro/contracts";
 import { CommissionsService } from "./commissions.service";
-import { createCommissionRuleSchema, updateCommissionStatusSchema } from "@bookpro/validation";
+import { createCommissionRuleSchema, updateCommissionRuleSchema, updateCommissionStatusSchema } from "@bookpro/validation";
 
 @Controller("organizations/:orgId/commissions")
 export class CommissionsController {
@@ -54,21 +54,17 @@ export class CommissionsController {
     @Post("rules")
     async createRule(
         @Param("orgId") orgId: string,
-        @Body() body: any,
+        @Body() body: unknown,
         @ReqContext() ctx?: RequestContext,
     ) {
         this.assertTenant(ctx!, orgId);
-        const name = body?.name || "Default Rule";
-        const calculationType = (body?.calculationType || body?.type || "PERCENTAGE") as any;
-        const rateValue = typeof body?.rateValue === "number" ? body.rateValue : typeof body?.rate === "number" ? body.rate : 1000;
-        const calculationBasis = (body?.calculationBasis || "NET_SERVICE_PRICE") as any;
-        const staffId = body?.staffId || null;
+        const validated = createCommissionRuleSchema.parse(body);
         return this.commissionsService.createCommissionRule(orgId, {
-            name,
-            calculationType,
-            rateValue,
-            calculationBasis,
-            staffId,
+            name: validated.name,
+            calculationType: validated.calculationType as any,
+            rateValue: validated.rateValue,
+            calculationBasis: validated.calculationBasis as any,
+            staffId: validated.staffId || undefined,
         });
     }
 
@@ -77,20 +73,16 @@ export class CommissionsController {
     async updateRule(
         @Param("orgId") orgId: string,
         @Param("id") id: string,
-        @Body() body: any,
+        @Body() body: unknown,
         @ReqContext() ctx?: RequestContext,
     ) {
         this.assertTenant(ctx!, orgId);
-        const dto: any = {};
-        if (body?.name !== undefined) dto.name = body.name;
-        if (body?.rateValue !== undefined) dto.rateValue = body.rateValue;
-        else if (body?.rate !== undefined) dto.rateValue = body.rate;
-        if (body?.calculationType !== undefined) dto.calculationType = body.calculationType;
-        else if (body?.type !== undefined) dto.calculationType = body.type;
-        if (body?.calculationBasis !== undefined) dto.calculationBasis = body.calculationBasis;
-        if (body?.isActive !== undefined) dto.isActive = body.isActive;
-        if (body?.staffId !== undefined) dto.staffId = body.staffId;
-        return this.commissionsService.updateCommissionRule(orgId, id, dto);
+        const validated = updateCommissionRuleSchema.parse(body);
+        return this.commissionsService.updateCommissionRule(orgId, id, {
+            ...validated,
+            calculationType: validated.calculationType as any,
+            calculationBasis: validated.calculationBasis as any,
+        });
     }
 
     @RequirePermissions(PermissionKey.PAYMENT_MANAGE)

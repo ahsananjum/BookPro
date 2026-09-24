@@ -357,10 +357,16 @@ export default function BusinessCalendarPage() {
       if (serviceFilter !== "ALL") params.append("serviceId", serviceFilter);
       if (statusFilter !== "ALL") params.append("status", statusFilter);
 
+      const holdParams = new URLSearchParams({
+        startDate: `${dateRange.startDate}T00:00:00.000Z`,
+        endDate: `${dateRange.endDate}T23:59:59.999Z`,
+      });
+      if (locationFilter !== "ALL") holdParams.append("locationId", locationFilter);
+
       const [res, holdsRes] = await Promise.all([
         apiFetch<AppointmentItem[]>(`/appointments?${params.toString()}`, {}, orgId),
         apiFetch<any[]>(
-          `/organizations/${orgId}/waitlist/holds?startDate=${dateRange.startDate}T00:00:00.000Z&endDate=${dateRange.endDate}T23:59:59.999Z`,
+          `/organizations/${orgId}/waitlist/holds?${holdParams.toString()}`,
           {},
           orgId
         ).catch(() => ({ success: false, data: [] })),

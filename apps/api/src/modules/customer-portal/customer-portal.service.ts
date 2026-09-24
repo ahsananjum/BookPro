@@ -739,7 +739,13 @@ export class CustomerPortalService {
         action: "customer.marketing_consent_updated",
         resourceType: "Customer",
         resourceId: customer.id,
-        payload: { consentMarketing: dto.consentMarketing },
+        payload: {
+          previousConsentMarketing: customer.consentMarketing,
+          consentMarketing: dto.consentMarketing,
+          consentMarketingAt: consentMarketingAt?.toISOString() || null,
+        },
+        ipAddress: ctx.ipAddress,
+        userAgent: ctx.userAgent,
       },
     });
 

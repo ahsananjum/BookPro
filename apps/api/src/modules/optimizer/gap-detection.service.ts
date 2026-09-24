@@ -10,6 +10,7 @@ import {
 } from "./deterministic-scoring.service";
 import { AIOptimizerExplanationService } from "./ai-optimizer-explanation.service";
 import { ScanGapsInput, ScheduleInsightDto } from "@bookpro/contracts";
+import { PolicyResolver } from "../availability/policy-resolver";
 
 @Injectable()
 export class GapDetectionService {
@@ -21,6 +22,7 @@ export class GapDetectionService {
         private readonly busyIntervalRepo: BusyIntervalRepository,
         private readonly scoringService: DeterministicScoringService,
         private readonly aiExplanationService: AIOptimizerExplanationService,
+        private readonly policyResolver: PolicyResolver,
     ) {}
 
     /**
@@ -147,11 +149,14 @@ export class GapDetectionService {
                         // Sample up to top 3 discrete gap openings
                         const topSlots = candidateSlots.slice(0, 3);
 
+                        const policy = await this.policyResolver.resolvePolicy(organizationId, loc.id, service.id);
+                        const minNoticeInstant = new Date(now.getTime() + (policy?.minNoticeHours || 0) * 3600000);
+
                         for (const slot of topSlots) {
                             const startAt = new Date(slot.startTime);
                             const endAt = new Date(slot.endTime);
 
-                            if (startAt < now) continue;
+                            if (startAt < minNoticeInstant) continue;
 
                             const gapCandidate: ScheduleGapCandidateInput = {
                                 id: `${loc.id}-${staff.id}-${startAt.getTime()}`,

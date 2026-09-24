@@ -24,7 +24,7 @@ export const manualAppointmentSchema = z.object({
 
 export const rescheduleAppointmentSchema = z.object({
     newStartAt: isoInstant,
-    newEndAt: isoInstant,
+    newEndAt: isoInstant.optional(),
     newStaffId: uuid.optional(),
     organizationId: uuid.optional(),
     overrideReason: z.string().trim().max(500).nullish(),
@@ -69,11 +69,19 @@ export const processRefundSchema = z.object({
 export const selectCalendarSchema = z.object({ staffId: uuid, calendarId: z.string().min(1).max(512), calendarName: z.string().max(200).optional() }).strict();
 export const staffIdBodySchema = z.object({ staffId: uuid }).strict();
 export const createCommissionRuleSchema = z.object({
-    staffId: uuid.optional(),
-    name: z.string().trim().min(1).max(160).default("Default Rule"),
+    staffId: uuid.optional().nullable(),
+    name: z.string().trim().min(1).max(160),
     calculationType: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]).default("PERCENTAGE"),
-    rateValue: z.number().int().min(0).max(100_000_000).default(1_000),
+    rateValue: z.number().int().min(0).max(100_000_000),
     calculationBasis: z.enum(["NET_SERVICE_PRICE", "GROSS_SERVICE_PRICE", "TOTAL_APPOINTMENT_PRICE"]).default("NET_SERVICE_PRICE"),
+}).strict();
+export const updateCommissionRuleSchema = z.object({
+    staffId: uuid.optional().nullable(),
+    name: z.string().trim().min(1).max(160).optional(),
+    calculationType: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]).optional(),
+    rateValue: z.number().int().min(0).max(100_000_000).optional(),
+    calculationBasis: z.enum(["NET_SERVICE_PRICE", "GROSS_SERVICE_PRICE", "TOTAL_APPOINTMENT_PRICE"]).optional(),
+    isActive: z.boolean().optional(),
 }).strict();
 export const updateCommissionStatusSchema = z.object({ status: z.enum(["PENDING", "APPROVED", "PAID", "CLAWED_BACK"]) }).strict();
 export const customerNoteSchema = z.object({ content: z.string().trim().min(1).max(5_000), isInternal: z.boolean().default(true) }).strict();

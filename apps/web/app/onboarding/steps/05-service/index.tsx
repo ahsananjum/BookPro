@@ -9,9 +9,13 @@ export interface ServiceData {
     durationMin: number;
     price: string;
     currency: string;
-    bufferAfterMin: number;
+    bufferAfterMin?: number;
+    preBufferMin?: number;
+    postBufferMin?: number;
     depositType: "NONE" | "PERCENTAGE" | "FIXED";
     depositValue: string;
+    capacity?: number;
+    taxBehavior?: "EXCLUSIVE" | "INCLUSIVE" | "NONE";
 }
 
 interface StepServiceProps {
@@ -227,13 +231,16 @@ export function StepService({
                         <button
                             key={buf}
                             type="button"
-                            onClick={() => onChange("bufferAfterMin", buf)}
+                            onClick={() => {
+                                onChange("postBufferMin", buf);
+                                onChange("bufferAfterMin", buf);
+                            }}
                             style={{
                                 padding: "6px 12px",
                                 borderRadius: "6px",
-                                border: data.bufferAfterMin === buf ? "1px solid #38bdf8" : "1px solid rgba(255,255,255,0.12)",
-                                backgroundColor: data.bufferAfterMin === buf ? "rgba(2, 132, 199, 0.2)" : "rgba(15, 23, 42, 0.6)",
-                                color: data.bufferAfterMin === buf ? "#38bdf8" : "#cbd5e1",
+                                border: (data.postBufferMin ?? data.bufferAfterMin ?? 0) === buf ? "1px solid #38bdf8" : "1px solid rgba(255,255,255,0.12)",
+                                backgroundColor: (data.postBufferMin ?? data.bufferAfterMin ?? 0) === buf ? "rgba(2, 132, 199, 0.2)" : "rgba(15, 23, 42, 0.6)",
+                                color: (data.postBufferMin ?? data.bufferAfterMin ?? 0) === buf ? "#38bdf8" : "#cbd5e1",
                                 fontWeight: 700,
                                 fontSize: "12px",
                                 cursor: "pointer",

@@ -155,6 +155,7 @@ export interface CreateStaffLeaveDto {
     startDate: string; // ISO 8601
     endDate: string;   // ISO 8601
     reason?: string;
+    overrideConflict?: boolean;
 }
 
 export interface CreateServiceDto {

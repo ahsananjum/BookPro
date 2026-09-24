@@ -21,7 +21,28 @@ export class NotificationService {
      * Translates a committed domain outbox event into durable Notification intents
      */
     async handleOutboxEvent(eventType: string, payload: any, eventId?: string, outboxOrgId?: string) {
-        const organizationId = outboxOrgId || payload.organizationId || "00000000-0000-0000-0000-000000000001";
+        let organizationId = outboxOrgId || payload.organizationId || null;
+        if (!organizationId) {
+            if (payload.appointmentId || payload.id) {
+                const a = await this.prisma.appointment.findUnique({
+                    where: { id: payload.appointmentId || payload.id },
+                    select: { organizationId: true },
+                });
+                if (a) organizationId = a.organizationId;
+            } else if (payload.bookingHoldId) {
+                const h = await this.prisma.bookingHold.findUnique({
+                    where: { id: payload.bookingHoldId },
+                    select: { organizationId: true },
+                });
+                if (h) organizationId = h.organizationId;
+            } else if (payload.userId) {
+                const m = await this.prisma.membership.findFirst({
+                    where: { userId: payload.userId, status: "ACTIVE" },
+                    select: { organizationId: true },
+                });
+                if (m) organizationId = m.organizationId;
+            }
+        }
 
         try {
             switch (eventType) {
@@ -82,6 +103,8 @@ export class NotificationService {
                     break;
                 }
                 case "identity.email_verification_requested": {
+                    const org = organizationId ? await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true, brandName: true } }) : null;
+                    const studioName = org?.brandName || org?.name || "BookPro";
                     const notification = await this.createDurableNotification({
                         organizationId,
                         recipient: payload.recipientEmail,
@@ -92,7 +115,7 @@ export class NotificationService {
                             fullName: payload.fullName,
                             verificationCode: payload.verificationCode,
                             expiresInMinutes: 15,
-                            studioName: "BookPro",
+                            studioName,
                         },
                         dedupeKey: `identity:verify:${eventId || payload.userId}`,
                     });
@@ -120,14 +143,14 @@ export class NotificationService {
                     const variables = {
                         customerName: appt.customer.fullName || "Valued Guest",
                         serviceName: appt.service?.name || "Service",
-                        studioName: appt.organization?.name || "Luxe Studio",
+                        studioName: appt.organization?.brandName || appt.organization?.name || "Studio",
                         staffName: appt.staff?.displayName || "Our Team",
                         locationName: appt.location?.name || "Main Location",
                         locationAddress: appt.location?.address || "",
-                        startFormatted: new Date(appt.startAt).toLocaleString("en-US", { timeZone: appt.location?.timezone || "America/New_York", dateStyle: "full", timeStyle: "short" }),
+                        startFormatted: new Date(appt.startAt).toLocaleString("en-US", { timeZone: appt.location?.timezone || appt.organization?.timezone || "America/New_York", dateStyle: "full", timeStyle: "short" }),
                         durationMin: appt.service?.durationMin || 60,
-                        priceFormatted: new Intl.NumberFormat(undefined, { style: "currency", currency: appt.currency || "USD" }).format(appt.priceCents / 100),
-                        brandColor: "#0284c7",
+                        priceFormatted: new Intl.NumberFormat(undefined, { style: "currency", currency: appt.currency || appt.organization?.currency || "USD" }).format(appt.priceCents / 100),
+                        brandColor: appt.organization?.primaryColor || "#0284c7",
                         appointmentVersion: appt.version,
                     };
 
@@ -183,12 +206,12 @@ export class NotificationService {
                     const variables = {
                         customerName: appt.customer.fullName || "Valued Guest",
                         serviceName: appt.service?.name || "Service",
-                        studioName: appt.organization?.name || "Luxe Studio",
+                        studioName: appt.organization?.brandName || appt.organization?.name || "Studio",
                         staffName: appt.staff?.displayName || "Our Team",
                         locationName: appt.location?.name || "Main Location",
                         locationAddress: appt.location?.address || "",
-                        startFormatted: new Date(appt.startAt).toLocaleString("en-US", { timeZone: appt.location?.timezone || "America/New_York", dateStyle: "full", timeStyle: "short" }),
-                        brandColor: "#0284c7",
+                        startFormatted: new Date(appt.startAt).toLocaleString("en-US", { timeZone: appt.location?.timezone || appt.organization?.timezone || "America/New_York", dateStyle: "full", timeStyle: "short" }),
+                        brandColor: appt.organization?.primaryColor || "#0284c7",
                         appointmentVersion: appt.version,
                     };
 

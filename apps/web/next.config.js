@@ -16,6 +16,7 @@ const nextConfig = {
             { source: "/staff", destination: "/workspace", permanent: true },
             { source: "/admin/platform", destination: "/platform", permanent: true },
             { source: "/book/:slug", destination: "/:slug/book", permanent: true },
+            { source: "/customer-portal", destination: "/customer", permanent: true },
         ];
     },
     async rewrites() {

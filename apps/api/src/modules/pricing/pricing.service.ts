@@ -94,27 +94,51 @@ export class PricingService {
         // 4. Coupon Discount Calculation
         let discountCents = 0;
         let appliedCouponCode: string | undefined = undefined;
+        let couponError: { code: string; message: string } | undefined = undefined;
 
         if (dto.couponCode) {
+            const normalizedCode = dto.couponCode.trim().toUpperCase();
             const coupon = await this.prisma.coupon.findFirst({
                 where: {
                     organizationId,
-                    code: dto.couponCode.trim().toUpperCase(),
-                    isActive: true,
+                    code: normalizedCode,
                 },
             });
 
-            if (coupon) {
+            if (!coupon) {
+                couponError = {
+                    code: "COUPON_NOT_FOUND",
+                    message: `Promo code "${normalizedCode}" was not found.`,
+                };
+            } else if (!coupon.isActive) {
+                couponError = {
+                    code: "COUPON_INACTIVE",
+                    message: `Promo code "${normalizedCode}" is no longer active.`,
+                };
+            } else {
                 const now = new Date();
-                const isValidDate =
-                    (!coupon.validFrom || coupon.validFrom <= now) &&
-                    (!coupon.validTo || coupon.validTo >= now);
-                const isValidMinSpend =
-                    !coupon.minSpendCents || netSubtotalCents >= coupon.minSpendCents;
-                const isValidUsage =
-                    !coupon.usageLimit || coupon.usageCount < coupon.usageLimit;
+                const isExpired = Boolean(coupon.validTo && coupon.validTo < now);
+                const isNotYetActive = Boolean(coupon.validFrom && coupon.validFrom > now);
+                const isUsageLimitReached = Boolean(coupon.usageLimit !== null && coupon.usageLimit !== undefined && coupon.usageCount >= coupon.usageLimit);
+                const isMinSpendNotMet = Boolean(coupon.minSpendCents !== null && coupon.minSpendCents !== undefined && netSubtotalCents < coupon.minSpendCents);
 
-                if (isValidDate && isValidMinSpend && isValidUsage) {
+                if (isExpired || isNotYetActive) {
+                    couponError = {
+                        code: "COUPON_EXPIRED",
+                        message: `Promo code "${normalizedCode}" has expired or is not yet valid.`,
+                    };
+                } else if (isUsageLimitReached) {
+                    couponError = {
+                        code: "COUPON_LIMIT_REACHED",
+                        message: `Promo code "${normalizedCode}" has reached its maximum redemptions.`,
+                    };
+                } else if (isMinSpendNotMet) {
+                    const minSpendFormatted = `$${((coupon.minSpendCents || 0) / 100).toFixed(2)}`;
+                    couponError = {
+                        code: "COUPON_MIN_SPEND_NOT_MET",
+                        message: `A minimum spend of ${minSpendFormatted} is required for code "${normalizedCode}".`,
+                    };
+                } else {
                     appliedCouponCode = coupon.code;
                     if (coupon.discountType === "PERCENTAGE") {
                         // Support percentage either as direct percent (e.g. 20) or basis points (e.g. 2000)
@@ -176,6 +200,7 @@ export class PricingService {
             currency: service.currency || "USD",
             quoteVersion,
             appliedCouponCode,
+            couponError,
         };
     }
 }

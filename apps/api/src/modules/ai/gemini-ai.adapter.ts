@@ -24,7 +24,7 @@ export class GeminiAIAdapter implements AIProvider {
     }
 
     private getModel(): string {
-        return process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash";
+        return process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
     }
 
     private getTimeoutMs(): number {
@@ -52,9 +52,6 @@ export class GeminiAIAdapter implements AIProvider {
             "gemini-1.5-flash",
             "gemini-1.5-flash-latest",
             "gemini-flash-latest",
-            "gemini-3.5-flash-lite",
-            "gemini-3.6-flash",
-            "gemini-3.7-flash",
         ].filter((m, idx, arr) => Boolean(m) && arr.indexOf(m) === idx);
 
         let lastError: any = null;

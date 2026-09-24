@@ -226,6 +226,7 @@ export default function StaffManagementPage() {
   const [newLeaveReason, setNewLeaveReason] = useState("");
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
+  const [leaveOverride, setLeaveOverride] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -678,6 +679,7 @@ export default function StaffManagementPage() {
     setNewLeaveStart("");
     setNewLeaveEnd("");
     setNewLeaveReason("");
+    setLeaveOverride(false);
   };
 
   const handleCreateLeave = async (e: React.FormEvent) => {
@@ -702,6 +704,7 @@ export default function StaffManagementPage() {
           startDate: new Date(newLeaveStart).toISOString(),
           endDate: new Date(newLeaveEnd).toISOString(),
           reason: newLeaveReason.trim() || undefined,
+          overrideConflict: leaveOverride,
         }),
       });
 
@@ -716,6 +719,7 @@ export default function StaffManagementPage() {
         setNewLeaveStart("");
         setNewLeaveEnd("");
         setNewLeaveReason("");
+        setLeaveOverride(false);
         await fetchAll(false);
       } else {
         setLeaveError(res.error?.message || "Failed to record staff leave.");
@@ -2048,6 +2052,21 @@ export default function StaffManagementPage() {
                     style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid rgba(255, 255, 255, 0.12)", backgroundColor: "#0f172a", color: "#fff", fontSize: "12.5px" }}
                   />
                 </div>
+
+                {leaveError && leaveError.includes("confirmed appointment") && (
+                  <div style={{ marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <input
+                      type="checkbox"
+                      id="leaveOverrideCheck"
+                      checked={leaveOverride}
+                      onChange={(e) => setLeaveOverride(e.target.checked)}
+                      style={{ accentColor: "#f59e0b", cursor: "pointer" }}
+                    />
+                    <label htmlFor="leaveOverrideCheck" style={{ fontSize: "12px", color: "#fbbf24", cursor: "pointer", fontWeight: 600 }}>
+                      Override &amp; schedule anyway (I will manually reassign or cancel conflicting appointments)
+                    </label>
+                  </div>
+                )}
 
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <button

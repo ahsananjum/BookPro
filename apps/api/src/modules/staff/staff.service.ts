@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { CreateStaffDto, UpdateStaffDto, SetStaffAvailabilityDto, CreateStaffLeaveDto } from '@bookpro/contracts';
@@ -341,6 +341,37 @@ export class StaffService {
 
         const startDate = new Date(dto.startDate);
         const endDate = new Date(dto.endDate);
+
+        if (endDate <= startDate) {
+            throw new BadRequestException("End date must be strictly after start date.");
+        }
+
+        const conflicting = await this.prisma.appointment.findMany({
+            where: {
+                organizationId,
+                staffId,
+                status: { in: ['CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS', 'PENDING_PAYMENT'] },
+                startAt: { lt: endDate },
+                endAt: { gt: startDate },
+            },
+            include: {
+                customer: { select: { fullName: true } },
+            },
+        });
+
+        if (conflicting.length > 0 && !dto.overrideConflict) {
+            throw new ConflictException({
+                code: 'STAFF_LEAVE_CONFLICT',
+                message: `Staff member has ${conflicting.length} confirmed appointment(s) during this time-off window. Reassign or cancel those bookings first, or confirm override.`,
+                conflictingCount: conflicting.length,
+                conflictingAppointments: conflicting.map((c) => ({
+                    id: c.id,
+                    startAt: c.startAt.toISOString(),
+                    endAt: c.endAt.toISOString(),
+                    customerName: c.customer?.fullName || 'Customer',
+                })),
+            });
+        }
 
         const leave = await this.prisma.staffLeave.create({
             data: {

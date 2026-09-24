@@ -32,6 +32,7 @@ interface AuthContextType {
   hasPermission: (perm: PermissionKey) => boolean;
   hasRole: (...roles: RoleCode[]) => boolean;
   selectOrganization: (organizationId: string) => Promise<boolean>;
+  selectCustomerOrganization: (organizationId: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -42,6 +43,7 @@ const AuthContext = createContext<AuthContextType>({
   hasPermission: () => false,
   hasRole: () => false,
   selectOrganization: async () => false,
+  selectCustomerOrganization: async () => false,
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -95,6 +97,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
+  const selectCustomerOrganization = async (organizationId: string): Promise<boolean> => {
+    const response = await apiFetch("/auth/select-customer-organization", {
+      method: "POST",
+      body: JSON.stringify({ organizationId }),
+    });
+    if (!response.success) return false;
+    await fetchCurrentUser();
+    return true;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -105,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hasPermission,
         hasRole,
         selectOrganization,
+        selectCustomerOrganization,
       }}
     >
       {children}

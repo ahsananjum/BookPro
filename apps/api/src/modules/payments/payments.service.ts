@@ -748,6 +748,7 @@ export class PaymentsService {
                     },
                 });
             });
+            await this.outboxService.drainImmediate();
             return;
         }
 
@@ -861,12 +862,27 @@ export class PaymentsService {
                         },
                     });
 
-                    // Increment coupon usage count if a coupon was redeemed
+                    // Increment coupon usage count atomically with usage limit check
                     if (quote.appliedCouponCode) {
-                        await tx.coupon.updateMany({
-                            where: { organizationId: hold.organizationId, code: quote.appliedCouponCode },
-                            data: { usageCount: { increment: 1 } },
+                        const cpn = await tx.coupon.findFirst({
+                            where: { organizationId: hold.organizationId, code: quote.appliedCouponCode, isActive: true },
                         });
+                        if (cpn) {
+                            if (cpn.usageLimit !== null && cpn.usageLimit !== undefined) {
+                                await tx.coupon.updateMany({
+                                    where: {
+                                        id: cpn.id,
+                                        usageCount: { lt: cpn.usageLimit },
+                                    },
+                                    data: { usageCount: { increment: 1 } },
+                                });
+                            } else {
+                                await tx.coupon.update({
+                                    where: { id: cpn.id },
+                                    data: { usageCount: { increment: 1 } },
+                                });
+                            }
+                        }
                     }
 
 
@@ -929,6 +945,7 @@ export class PaymentsService {
                 });
 
                 if (!conversionFailedDueToRace) {
+                    await this.outboxService.drainImmediate();
                     return;
                 }
             }
@@ -1037,7 +1054,21 @@ export class PaymentsService {
                     data: { status: "CONVERTED" },
                 });
 
+                await this.outboxService.emit({
+                    aggregateType: "Appointment",
+                    aggregateId: appt.id,
+                    eventType: "appointment.confirmed",
+                    payload: {
+                        appointmentId: appt.id,
+                        organizationId: appt.organizationId,
+                        paymentRecordId: payment.id,
+                        amountCents: payment.amountCents,
+                        paymentStatus: appointmentPaymentStatus,
+                    },
+                });
+
                 this.logger.log(`Successfully recovered expired hold ${hold.id} into appointment ${appt.id}`);
+                await this.outboxService.drainImmediate();
             } catch (err: any) {
                 let refundProviderId: string | undefined;
                 try {

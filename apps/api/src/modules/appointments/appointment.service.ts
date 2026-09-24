@@ -442,6 +442,7 @@ export class AppointmentService {
             },
         );
 
+        await this.outboxService.drainImmediate();
         return res.data;
     }
 
@@ -781,6 +782,7 @@ export class AppointmentService {
             }
         }
 
+        await this.outboxService.drainImmediate();
         return updated;
     }
 
@@ -900,6 +902,7 @@ export class AppointmentService {
             });
         }
 
+        await this.outboxService.drainImmediate();
         return res.data;
     }
 
@@ -1369,6 +1372,7 @@ export class AppointmentService {
                 });
             }
 
+            await this.outboxService.drainImmediate();
             return updated;
         } catch (txError: any) {
             this.logger.error(
@@ -1591,6 +1595,7 @@ export class AppointmentService {
             }).catch(() => null);
         }
 
+        await this.outboxService.drainImmediate();
         return updated;
     }
 

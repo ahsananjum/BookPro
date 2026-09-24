@@ -814,7 +814,7 @@ export class AIToolRegistryService {
                 }
 
                 // Create the authoritative BookingHold in PostgreSQL with ScheduleGuard pessimistic locking
-                const hold = await Promise.resolve(this.holds.createHold({
+                const hold = await this.holds.createHold({
                     organizationId: ctx.organizationId,
                     locationId,
                     serviceId,
@@ -828,41 +828,39 @@ export class AIToolRegistryService {
                     guestPhone,
                     idempotencyKey: `ai_hold_${conversationId}_${Date.now()}`,
                     createdById: this.uuidOrNull(ctx.subjectId),
-                })).catch(() => null);
+                });
 
                 // Check for required intake questions and safely unlock payment gate if none required
-                if (hold?.id) {
-                    const applicableForms = await this.prisma.intakeForm.findMany({
-                        where: {
-                            organizationId: ctx.organizationId,
-                            archivedAt: null,
-                            isActive: true,
-                            OR: [
-                                { isGlobal: true },
-                                { serviceIntakeForms: { some: { serviceId } } },
-                            ],
-                        },
-                        include: {
-                            serviceIntakeForms: { where: { serviceId } },
-                        },
-                    });
-                    const hasRequiredQuestions = applicableForms.some((form) => {
-                        const isFormRequired = form.isGlobal || form.serviceIntakeForms.some((s) => s.isRequired);
-                        const fields = Array.isArray(form.fields) ? (form.fields as any[]) : [];
-                        return isFormRequired && fields.some((f) => f.required);
-                    });
+                const applicableForms = await this.prisma.intakeForm.findMany({
+                    where: {
+                        organizationId: ctx.organizationId,
+                        archivedAt: null,
+                        isActive: true,
+                        OR: [
+                            { isGlobal: true },
+                            { serviceIntakeForms: { some: { serviceId } } },
+                        ],
+                    },
+                    include: {
+                        serviceIntakeForms: { where: { serviceId } },
+                    },
+                });
+                const hasRequiredQuestions = applicableForms.some((form) => {
+                    const isFormRequired = form.isGlobal || form.serviceIntakeForms.some((s) => s.isRequired);
+                    const fields = Array.isArray(form.fields) ? (form.fields as any[]) : [];
+                    return isFormRequired && fields.some((f) => f.required);
+                });
 
-                    if (!hasRequiredQuestions) {
-                        await this.prisma.bookingHold.update({
-                            where: { id: hold.id },
-                            data: {
-                                guestName,
-                                guestEmail,
-                                guestPhone,
-                                detailsCompletedAt: new Date(),
-                            },
-                        });
-                    }
+                if (!hasRequiredQuestions) {
+                    await this.prisma.bookingHold.update({
+                        where: { id: hold.id },
+                        data: {
+                            guestName,
+                            guestEmail,
+                            guestPhone,
+                            detailsCompletedAt: new Date(),
+                        },
+                    });
                 }
 
                 const staff = staffId ? await this.staff.getStaffById(ctx.organizationId, staffId).catch(() => null) : null;
@@ -871,8 +869,8 @@ export class AIToolRegistryService {
                 const payableNowCents = Number(holdQuote.payableNowCents ?? quote?.depositCents ?? (quote as any)?.depositRequiredCents ?? 0);
                 const remainingBalanceCents = Number(holdQuote.remainingBalanceCents ?? Math.max(0, totalCents - payableNowCents));
                 const currency = String(quote?.currency || holdQuote.currency || service.currency || "USD");
-                const holdExpiresAt = hold?.expiresAt ? new Date(hold.expiresAt) : new Date(Date.now() + Number(policy?.holdDurationMinutes || 10) * 60_000);
-                const holdId = hold?.id || randomUUID();
+                const holdExpiresAt = new Date(hold.expiresAt);
+                const holdId = hold.id;
 
                 const org = await this.prisma.organization.findUnique({
                     where: { id: ctx.organizationId },
@@ -1390,7 +1388,7 @@ export class AIToolRegistryService {
                 });
             }
             case "rescheduleStaffAppointment": {
-                const appt: any = await this.appointments.getAppointmentDetail(args.appointmentId, ctx.organizationId);
+                const appt: any = await this.getAuthorizedBooking(args.appointmentId, ctx, PermissionKey.APPOINTMENT_MUTATE);
                 const durationMin = appt.service?.durationMin || 30;
                 const newEndAt = args.newEndAt || new Date(new Date(args.newStartAt).getTime() + durationMin * 60 * 1000).toISOString();
                 return this.proposalCard(conversationId, name, { ...args, newEndAt }, ctx, {
@@ -1405,7 +1403,7 @@ export class AIToolRegistryService {
                 });
             }
             case "cancelStaffAppointment": {
-                const appt: any = await this.appointments.getAppointmentDetail(args.appointmentId, ctx.organizationId);
+                const appt: any = await this.getAuthorizedBooking(args.appointmentId, ctx, PermissionKey.APPOINTMENT_CANCEL);
                 return this.proposalCard(conversationId, name, args, ctx, {
                     appointmentId: appt.id,
                     startAt: appt.startAt.toISOString(),
@@ -1415,6 +1413,7 @@ export class AIToolRegistryService {
                 });
             }
             case "updateAppointmentStatus": {
+                await this.getAuthorizedBooking(args.appointmentId, ctx, PermissionKey.APPOINTMENT_MUTATE);
                 const appt = await this.appointments.transitionStatus(
                     args.appointmentId,
                     ctx.organizationId,
@@ -2077,7 +2076,7 @@ export class AIToolRegistryService {
                 throw new ConflictException({ code: "AI_PROPOSAL_STALE", message: "The service is no longer active." });
             }
         } else if (["rescheduleStaffAppointment", "cancelStaffAppointment"].includes(action)) {
-            const appt = await this.appointments.getAppointmentDetail(args.appointmentId, ctx.organizationId);
+            const appt = await this.getAuthorizedBooking(args.appointmentId, ctx, action === "cancelStaffAppointment" ? PermissionKey.APPOINTMENT_CANCEL : PermissionKey.APPOINTMENT_MUTATE);
             if (["CANCELLED", "COMPLETED", "NO_SHOW"].includes(appt.status)) {
                 throw new ConflictException({ code: "AI_PROPOSAL_STALE", message: "The appointment is already in a terminal state." });
             }

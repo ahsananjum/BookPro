@@ -28,6 +28,7 @@ export interface PricingQuoteResponseDto {
     currency: string;
     quoteVersion: string;
     appliedCouponCode?: string;
+    couponError?: { code: string; message: string };
 }
 
 export interface CancellationQuoteResponseDto {

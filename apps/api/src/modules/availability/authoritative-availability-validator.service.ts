@@ -853,7 +853,7 @@ export class AuthoritativeAvailabilityValidatorService {
 
             if (targetType === "HOLD") {
                 const policy = await this.policyResolver.resolvePolicy(organizationId, locationId, serviceId);
-                const holdDurationMinutes = (policy as any)?.holdDurationMinutes ?? 10;
+                const holdDurationMinutes = policy.holdDurationMinutes;
                 const expiresAt = new Date(Date.now() + holdDurationMinutes * 60 * 1000);
 
                 createdHold = await tx.bookingHold.create({
@@ -1005,13 +1005,28 @@ export class AuthoritativeAvailabilityValidatorService {
                         },
                     });
 
-                    // Increment coupon usage count if a coupon was redeemed
+                    // Increment coupon usage count atomically with usage limit check
                     const couponCode = (quoteSnapshot as any)?.appliedCouponCode;
                     if (couponCode) {
-                        await tx.coupon.updateMany({
-                            where: { organizationId, code: couponCode },
-                            data: { usageCount: { increment: 1 } },
+                        const cpn = await tx.coupon.findFirst({
+                            where: { organizationId, code: couponCode, isActive: true },
                         });
+                        if (cpn) {
+                            if (cpn.usageLimit !== null && cpn.usageLimit !== undefined) {
+                                await tx.coupon.updateMany({
+                                    where: {
+                                        id: cpn.id,
+                                        usageCount: { lt: cpn.usageLimit },
+                                    },
+                                    data: { usageCount: { increment: 1 } },
+                                });
+                            } else {
+                                await tx.coupon.update({
+                                    where: { id: cpn.id },
+                                    data: { usageCount: { increment: 1 } },
+                                });
+                            }
+                        }
                     }
 
                     // Link allocated resources

@@ -90,6 +90,21 @@ interface IntakeFormItem {
   fields: IntakeFormField[];
 }
 
+function parseApiError(json: any, fallback: string): string {
+  if (!json) return fallback;
+  if (typeof json === "string") return json;
+  if (Array.isArray(json.details) && json.details.length > 0) {
+    const detailMsgs = json.details
+      .map((d: any) => d.message || d.detail || (typeof d === "string" ? d : JSON.stringify(d)))
+      .filter(Boolean);
+    if (detailMsgs.length > 0) return detailMsgs.join("; ");
+  }
+  if (json.detail && typeof json.detail === "string") return json.detail;
+  if (json.message && typeof json.message === "string") return json.message;
+  if (json.title && typeof json.title === "string") return json.title;
+  return fallback;
+}
+
 export default function PublicBookingPage() {
   const params = useParams();
   const router = useRouter();
@@ -108,6 +123,14 @@ export default function PublicBookingPage() {
     currency?: string;
     defaultLocale?: string;
     timezone?: string;
+    policy?: {
+      minNoticeHours?: number;
+      maxNoticeDays?: number;
+      cancelCutoffHours?: number;
+      cancelFeeType?: string;
+      cancelFeeValue?: number;
+      holdDurationMinutes?: number;
+    } | null;
   }>({ name: slug || "Studio", currency: "USD", defaultLocale: "en-US" });
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [locations, setLocations] = useState<LocationItem[]>([]);
@@ -121,35 +144,42 @@ export default function PublicBookingPage() {
   const { todayStr, maxDateStr, dayOptions } = useMemo(() => {
     const timeZone = businessInfo.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
     const now = getServerNow();
-    const d0 = new Date(now.getTime());
-    const d1 = new Date(now.getTime());
-    d1.setDate(d1.getDate() + 1);
-    const d2 = new Date(now.getTime());
-    d2.setDate(d2.getDate() + 2);
+    const maxDays = businessInfo.policy?.maxNoticeDays ?? 60;
 
-    const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
     const toIsoDate = (d: Date) => {
       const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
       return `${parts.find((p) => p.type === "year")?.value}-${parts.find((p) => p.type === "month")?.value}-${parts.find((p) => p.type === "day")?.value}`;
     };
 
-    const t0 = toIsoDate(d0);
-    const t1 = toIsoDate(d1);
-    const t2 = toIsoDate(d2);
-
     const formatShort = (d: Date) =>
       d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
+    const todayIso = toIsoDate(now);
+    const maxDate = new Date(now.getTime());
+    maxDate.setDate(maxDate.getDate() + maxDays);
+    const maxDateIso = toIsoDate(maxDate);
+
+    // Generate up to 7 dynamic quick tabs (or fewer if maxDays < 7)
+    const quickTabCount = Math.min(Math.max(1, maxDays), 7);
+    const options = [];
+    for (let i = 0; i < quickTabCount; i++) {
+      const targetDate = new Date(now.getTime());
+      targetDate.setDate(targetDate.getDate() + i);
+      const iso = toIsoDate(targetDate);
+      const label = i === 0 ? "Today" : i === 1 ? "Tomorrow" : targetDate.toLocaleDateString("en-US", { weekday: "short" });
+      options.push({
+        key: iso,
+        label,
+        sub: formatShort(targetDate),
+      });
+    }
+
     return {
-      todayStr: t0,
-      maxDateStr: t2,
-      dayOptions: [
-        { key: t0, label: "Today", sub: formatShort(d0) },
-        { key: t1, label: "Tomorrow", sub: formatShort(d1) },
-        { key: t2, label: "+2 Days", sub: formatShort(d2) },
-      ],
+      todayStr: todayIso,
+      maxDateStr: maxDateIso,
+      dayOptions: options,
     };
-  }, [businessInfo.timezone]);
+  }, [businessInfo.timezone, businessInfo.policy?.maxNoticeDays]);
 
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const d = getServerNow();
@@ -159,6 +189,10 @@ export default function PublicBookingPage() {
   const [availableSlots, setAvailableSlots] = useState<
     Array<{ startAt: string; endAt: string; availableStaffIds?: string[] }>
   >([]);
+  const [slotFetchStatus, setSlotFetchStatus] = useState<
+    "IDLE" | "FETCHING" | "AVAILABLE" | "WAITLIST" | "ERROR"
+  >("IDLE");
+  const [slotFetchError, setSlotFetchError] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
 
   // Active Hold State
@@ -262,9 +296,9 @@ export default function PublicBookingPage() {
         }),
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(json.message || "Failed to register on priority waitlist.");
+        throw new Error(parseApiError(json, "Failed to register on priority waitlist."));
       }
 
       const data = json.data || json;
@@ -319,7 +353,7 @@ export default function PublicBookingPage() {
           couponCode: couponInput.trim().toUpperCase(),
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (res.ok && data) {
         const quote = data.data || data;
         if (quote.discountCents > 0) {
@@ -334,11 +368,11 @@ export default function PublicBookingPage() {
           setAppliedCouponCode("");
           setCouponMessage({
             error: true,
-            text: "Promo code could not be applied or minimum spend not reached.",
+            text: quote.couponError?.message || "Promo code could not be applied or minimum spend not reached.",
           });
         }
       } else {
-        setCouponMessage({ error: true, text: data?.message || "Invalid promo code." });
+        setCouponMessage({ error: true, text: parseApiError(data, "Invalid promo code.") });
       }
     } catch {
       setCouponMessage({ error: true, text: "Failed to validate promo code." });
@@ -396,7 +430,7 @@ export default function PublicBookingPage() {
     const queryHoldId = urlParams.get("holdId");
     const queryGuestToken = urlParams.get("guestToken") || "";
 
-    if (isFromAi && queryHoldId) {
+    if (queryHoldId) {
       setHoldId(queryHoldId);
       if (queryGuestToken) setGuestToken(queryGuestToken);
 
@@ -446,111 +480,127 @@ export default function PublicBookingPage() {
     return () => { window.removeEventListener("online", online); window.removeEventListener("offline", offline); };
   }, []);
 
-  // Load initial organization profile, services, locations, and staff
+  // Load initial organization profile, services, locations, and staff using coordinated authoritative payload
   useEffect(() => {
     if (!slug) return;
 
+    const controller = new AbortController();
     const headers = { "x-tenant-slug": slug };
 
-    // 1. Fetch Organization Profile with Embedded Services & Locations
-    fetch(`/api/v1/organization/by-slug/${encodeURIComponent(slug)}`, { headers })
-      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
-      .then((data) => {
-        const org = data?.data || data;
-        if (org) {
-          if (org.serverTime) {
-            syncServerTime(org.serverTime);
-          }
-          setBusinessInfo({
-            id: org.id,
-            name: org.name || slug,
-            brandName: org.brandName,
-            logoUrl: org.logoUrl,
-            stripeConnected: org.stripeConnected,
-            currency: org.currency || "USD",
-            defaultLocale: org.defaultLocale || "en-US",
-            timezone: org.timezone || "UTC",
-          });
+    const loadBootstrapData = async () => {
+      try {
+        // 1. Authoritative Organization Profile with Embedded Services, Locations, Staff, and Policy
+        const res = await fetch(`/api/v1/organization/by-slug/${encodeURIComponent(slug)}`, {
+          headers,
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error("Failed to load organization profile");
+        const json = await res.json();
+        const org = json?.data || json;
+        if (!org || controller.signal.aborted) return;
 
-          if (Array.isArray(org.services) && org.services.length > 0) {
-            const activeOnly = org.services.filter((s: any) => s.isActive !== false);
-            setServices(activeOnly);
-            const queryServiceId = typeof window !== "undefined"
-              ? new URLSearchParams(window.location.search).get("serviceId") || new URLSearchParams(window.location.search).get("service")
-              : null;
-            setSelectedServiceId((prev) => {
-              if (queryServiceId && activeOnly.some((s: any) => s.id === queryServiceId)) return queryServiceId;
-              if (prev && activeOnly.some((s: any) => s.id === prev)) return prev;
-              return activeOnly[0]?.id || "";
+        if (org.serverTime) {
+          syncServerTime(org.serverTime);
+        }
+
+        setBusinessInfo({
+          id: org.id,
+          name: org.name || slug,
+          brandName: org.brandName,
+          logoUrl: org.logoUrl,
+          stripeConnected: org.stripeConnected,
+          currency: org.currency || "USD",
+          defaultLocale: org.defaultLocale || "en-US",
+          timezone: org.timezone || "UTC",
+          policy: org.policy || null,
+        });
+
+        const queryParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+        const queryServiceId = queryParams?.get("serviceId") || queryParams?.get("service");
+        const queryLocationId = queryParams?.get("locationId") || queryParams?.get("location");
+
+        // Services: Use embedded services if provided, else fallback to services endpoint
+        let activeServices = Array.isArray(org.services) ? org.services.filter((s: any) => s.isActive !== false) : [];
+        if (activeServices.length === 0) {
+          try {
+            const sRes = await fetch(`/api/v1/services?slug=${encodeURIComponent(slug)}&activeOnly=true`, {
+              headers,
+              signal: controller.signal,
             });
-          }
-          if (Array.isArray(org.locations) && org.locations.length > 0) {
-            setLocations(org.locations);
-            const queryLocationId = typeof window !== "undefined"
-              ? new URLSearchParams(window.location.search).get("locationId") || new URLSearchParams(window.location.search).get("location")
-              : null;
-            setSelectedLocationId((prev) => {
-              if (queryLocationId && org.locations.some((l: any) => l.id === queryLocationId)) return queryLocationId;
-              if (prev && org.locations.some((l: any) => l.id === prev)) return prev;
-              return org.locations[0].id;
-            });
-          }
-          if (Array.isArray(org.staffProfiles) && org.staffProfiles.length > 0) {
-            setStaffList(org.staffProfiles);
+            if (sRes.ok) {
+              const sData = await sRes.json();
+              const list = Array.isArray(sData) ? sData : sData?.data || [];
+              activeServices = list.filter((s: any) => s.isActive !== false);
+            }
+          } catch (e: any) {
+            if (e.name !== "AbortError") console.warn("Fallback service load error:", e);
           }
         }
-      })
-      .catch((err) => console.warn("Failed to load organization profile", err));
-
-    // 2. Fetch Services from services endpoint with activeOnly filter
-    fetch(`/api/v1/services?slug=${encodeURIComponent(slug)}&activeOnly=true`, { headers })
-      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
-      .then((data) => {
-        const list = Array.isArray(data) ? data : data?.data || [];
-        const activeOnly = list.filter((s: any) => s.isActive !== false);
-        if (activeOnly.length > 0) {
-          setServices(activeOnly);
-          const queryServiceId = typeof window !== "undefined"
-            ? new URLSearchParams(window.location.search).get("serviceId") || new URLSearchParams(window.location.search).get("service")
-            : null;
+        if (!controller.signal.aborted) {
+          setServices(activeServices);
           setSelectedServiceId((prev) => {
-            if (queryServiceId && activeOnly.some((s: any) => s.id === queryServiceId)) return queryServiceId;
-            if (prev && activeOnly.some((s: any) => s.id === prev)) return prev;
-            return activeOnly[0]?.id || "";
+            if (queryServiceId && activeServices.some((s: any) => s.id === queryServiceId)) return queryServiceId;
+            if (prev && activeServices.some((s: any) => s.id === prev)) return prev;
+            return activeServices[0]?.id || "";
           });
         }
-      })
-      .catch((err) => console.warn("Failed to load services", err));
 
-    // 3. Fetch Locations
-    fetch(`/api/v1/locations?slug=${encodeURIComponent(slug)}`, { headers })
-      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
-      .then((data) => {
-        const list = Array.isArray(data) ? data : data?.data || [];
-        if (list.length > 0) {
-          setLocations(list);
-          const queryLocationId = typeof window !== "undefined"
-            ? new URLSearchParams(window.location.search).get("locationId") || new URLSearchParams(window.location.search).get("location")
-            : null;
+        // Locations: Use embedded locations if provided, else fallback to locations endpoint
+        let activeLocations = Array.isArray(org.locations) ? org.locations : [];
+        if (activeLocations.length === 0) {
+          try {
+            const lRes = await fetch(`/api/v1/locations?slug=${encodeURIComponent(slug)}`, {
+              headers,
+              signal: controller.signal,
+            });
+            if (lRes.ok) {
+              const lData = await lRes.json();
+              activeLocations = Array.isArray(lData) ? lData : lData?.data || [];
+            }
+          } catch (e: any) {
+            if (e.name !== "AbortError") console.warn("Fallback location load error:", e);
+          }
+        }
+        if (!controller.signal.aborted) {
+          setLocations(activeLocations);
           setSelectedLocationId((prev) => {
-            if (queryLocationId && list.some((l: any) => l.id === queryLocationId)) return queryLocationId;
-            if (prev && list.some((l: any) => l.id === prev)) return prev;
-            return list[0].id;
+            if (queryLocationId && activeLocations.some((l: any) => l.id === queryLocationId)) return queryLocationId;
+            if (prev && activeLocations.some((l: any) => l.id === prev)) return prev;
+            return activeLocations[0]?.id || "";
           });
         }
-      })
-      .catch((err) => console.warn("Failed to load locations", err));
 
-    // 4. Fetch Staff (Active & Booking Visible only)
-    fetch(`/api/v1/staff?slug=${encodeURIComponent(slug)}&activeOnly=true&bookingVisibleOnly=true`, { headers })
-      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
-      .then((data) => {
-        const list = Array.isArray(data) ? data : data?.data || [];
-        if (list.length > 0) {
-          setStaffList(list);
+        // Staff: Use embedded staff profiles if provided, else fallback to staff endpoint
+        let activeStaff = Array.isArray(org.staffProfiles) ? org.staffProfiles : [];
+        if (activeStaff.length === 0) {
+          try {
+            const stRes = await fetch(
+              `/api/v1/staff?slug=${encodeURIComponent(slug)}&activeOnly=true&bookingVisibleOnly=true`,
+              { headers, signal: controller.signal }
+            );
+            if (stRes.ok) {
+              const stData = await stRes.json();
+              activeStaff = Array.isArray(stData) ? stData : stData?.data || [];
+            }
+          } catch (e: any) {
+            if (e.name !== "AbortError") console.warn("Fallback staff load error:", e);
+          }
         }
-      })
-      .catch((err) => console.warn("Failed to load staff", err));
+        if (!controller.signal.aborted) {
+          setStaffList(activeStaff);
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          console.warn("Failed to load organization bootstrap data:", err);
+        }
+      }
+    };
+
+    loadBootstrapData();
+
+    return () => {
+      controller.abort();
+    };
   }, [slug]);
 
   // Real-time synchronization for customer booking portal
@@ -634,9 +684,12 @@ export default function PublicBookingPage() {
 
   // Load availability slots when service, location, staff, or date changes
   useEffect(() => {
-    if (!slug || !selectedServiceId || !selectedLocationId || !selectedDate) return;
+    if (!slug || !selectedServiceId || !selectedLocationId || !selectedDate) {
+      setAvailableSlots([]);
+      setSlotFetchStatus("IDLE");
+      return;
+    }
 
-    // Strict date window clamp: Cannot book previous dates, max 2 days ahead allowed
     if (selectedDate < todayStr) {
       setSelectedDate(todayStr);
       return;
@@ -645,6 +698,10 @@ export default function PublicBookingPage() {
       setSelectedDate(maxDateStr);
       return;
     }
+
+    const controller = new AbortController();
+    setSlotFetchStatus("FETCHING");
+    setSlotFetchError(null);
 
     const queryParams = new URLSearchParams({
       serviceId: selectedServiceId,
@@ -658,18 +715,20 @@ export default function PublicBookingPage() {
 
     fetch(`/api/v1/availability?${queryParams.toString()}`, {
       headers: { "x-tenant-slug": slug },
+      signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : Promise.reject(res)))
       .then((data) => {
+        if (controller.signal.aborted) return;
         const rawSlots = Array.isArray(data) ? data : data?.data || data?.slots || [];
-        const nowMs = Date.now();
+        const nowMs = getServerNow().getTime();
         const normalized = rawSlots.map((s: any) => ({
           ...s,
           startAt: s.startAt || s.startTime,
           endAt: s.endAt || s.endTime,
           staffId: s.staffId || (s.availableStaffIds && s.availableStaffIds[0]) || undefined,
         }));
-        // Strictly filter out any past slots across all dates
+        // Strictly filter out any past slots across all dates using authoritative server time
         const validSlots = normalized.filter((slot: any) => {
           if (!slot.startAt) return false;
           const slotMs = new Date(slot.startAt).getTime();
@@ -677,11 +736,19 @@ export default function PublicBookingPage() {
           return slotMs > nowMs;
         });
         setAvailableSlots(validSlots);
+        setSlotFetchStatus(validSlots.length > 0 ? "AVAILABLE" : "WAITLIST");
       })
       .catch((err) => {
+        if (controller.signal.aborted) return;
         console.warn("Failed to load availability slots", err);
         setAvailableSlots([]);
+        setSlotFetchStatus("ERROR");
+        setSlotFetchError("Unable to load slots for this date. Please check your connection or choose another date.");
       });
+
+    return () => {
+      controller.abort();
+    };
   }, [slug, selectedServiceId, selectedLocationId, selectedStaffId, selectedDate, todayStr, maxDateStr]);
 
   // Live Ticking Hold Timer protected against clock tampering
@@ -814,9 +881,9 @@ export default function PublicBookingPage() {
         }),
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(json.message || "Slot reservation failed. It may have just been booked.");
+        throw new Error(parseApiError(json, "Slot reservation failed. It may have just been booked."));
       }
 
       const holdData = json.data || json;
@@ -887,9 +954,9 @@ export default function PublicBookingPage() {
         }),
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(json.message || "Failed to save details.");
+        throw new Error(parseApiError(json, "Failed to save details."));
       }
 
       const result = json.data || json;
@@ -934,15 +1001,15 @@ export default function PublicBookingPage() {
         }),
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => null);
       if (!res.ok) {
         console.warn("Payment intent notice:", json);
-        setGeneralError(json.detail || json.message || "Unable to initialize payment gateway.");
+        setGeneralError(parseApiError(json, "Unable to initialize payment gateway."));
         return;
       }
 
-      const piData = json.data || json;
-      if (piData.clientSecret) {
+      const piData = json?.data || json;
+      if (piData?.clientSecret) {
         setPaymentClientSecret(piData.clientSecret);
         if (piData.publishableKey) {
           setStripePublishableKey(piData.publishableKey);
@@ -992,9 +1059,9 @@ export default function PublicBookingPage() {
         }),
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(json.message || "Failed to finalize booking.");
+        throw new Error(parseApiError(json, "Failed to finalize booking."));
       }
 
       pollBookingConfirmation(holdId, guestToken);
@@ -1472,7 +1539,9 @@ export default function PublicBookingPage() {
 
               {/* Quick Day Selector Tabs & Date Input */}
               <div style={{ marginBottom: "1.75rem" }}>
-                <label className={styles.formLabel}>Choose Appointment Date (Today to Max 2 Days Ahead)</label>
+                <label className={styles.formLabel}>
+                  Choose Appointment Date (Up to {businessInfo.policy?.maxNoticeDays || 60} Days in Advance)
+                </label>
                 <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
                   {dayOptions.map((opt) => {
                     const isDaySelected = selectedDate === opt.key;
@@ -1524,7 +1593,35 @@ export default function PublicBookingPage() {
                 )}
               </div>
 
-              {availableSlots.length === 0 ? (
+              {slotFetchStatus === "FETCHING" ? (
+                <div style={{ padding: "1rem 0", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "0.75rem" }}>
+                  {[...Array(6)].map((_, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        height: "48px",
+                        borderRadius: "10px",
+                        background: "linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 100%)",
+                        border: "1px solid rgba(255,255,255,0.05)",
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : slotFetchStatus === "ERROR" ? (
+                <div style={{ padding: "1.5rem", borderRadius: "12px", background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#fca5a5", textAlign: "center", marginBottom: "1.5rem" }}>
+                  <p style={{ margin: 0, fontWeight: 500 }}>{slotFetchError || "Unable to load appointment slots for this date."}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSlotFetchStatus("FETCHING");
+                      setSelectedDate((d) => d);
+                    }}
+                    style={{ marginTop: "0.75rem", padding: "0.5rem 1rem", background: "rgba(255,255,255,0.1)", border: "none", borderRadius: "6px", color: "#fff", cursor: "pointer" }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : slotFetchStatus === "WAITLIST" || availableSlots.length === 0 ? (
                 /* Fully Booked State: Render Embedded Priority Waitlist Card */
                 <div
                   style={{
