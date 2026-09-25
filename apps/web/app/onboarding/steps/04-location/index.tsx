@@ -283,7 +283,7 @@ export function StepLocation({
                             }}
                         >
                             {timezones.map((tz) => (
-                                <option key={tz.name} value={tz.name}>
+                                <option key={tz.id} value={tz.id}>
                                     {tz.label || tz.name}
                                 </option>
                             ))}

@@ -1265,7 +1265,7 @@ export default function LocationsPage() {
                         style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.12)", backgroundColor: "#0f172a", color: "#fff", fontSize: "13px" }}
                       >
                         {timezones.map((tz) => (
-                          <option key={tz.name} value={tz.name}>
+                          <option key={tz.id} value={tz.id}>
                             {tz.label || tz.name}
                           </option>
                         ))}
