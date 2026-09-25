@@ -17,7 +17,7 @@ export class LocationService {
     private async invalidateAvailabilityCache(organizationId: string) {
         try {
             if (this.redisService && this.redisService.getIsConnected()) {
-                await this.redisService.delPrefix(`availability:slots:${organizationId}:`);
+                await this.redisService.delPrefix(RedisService.buildKey(organizationId, "availability"));
             }
         } catch (err: any) {
             this.logger.warn(`[LocationService] Failed to invalidate slot cache: ${err.message}`);
@@ -243,6 +243,15 @@ export class LocationService {
             reconnectStrategy: 'canonical_refetch',
             metadata: { locationId, name: dto.name },
         }).catch((err) => this.logger.warn(`[LocationService] Broadcast failed: ${err.message}`));
+
+        await this.realtimeService.broadcastEvent({
+            type: 'schedule.updated',
+            organizationId,
+            entityId: locationId,
+            timestamp: new Date().toISOString(),
+            reconnectStrategy: 'canonical_refetch',
+            metadata: { locationId },
+        }).catch((err) => this.logger.warn(`[LocationService] Schedule broadcast failed: ${err.message}`));
 
         return this.getLocationById(organizationId, locationId);
     }

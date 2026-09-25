@@ -7,8 +7,8 @@ export class CapacityAvailabilityService {
     constructor(private readonly prisma: PrismaService) { }
 
     /**
-     * Validates whether candidate interval has sufficient remaining group capacity.
-     * `maxCapacity - confirmedUnits - activeHoldUnits >= partySize`
+     * Validates whether candidate interval has sufficient remaining capacity.
+     * `maxCapacity - confirmedUnits - activeHoldUnits >= requestedPartySize`
      */
     async checkCapacity(
         organizationId: string,
@@ -17,6 +17,7 @@ export class CapacityAvailabilityService {
         candidateInterval: TimeInterval,
         requestedPartySize: number,
         serviceCapacity: number,
+        staffId?: string | null,
     ): Promise<{ hasCapacity: boolean; availableCapacity: number; reason?: string }> {
         if (requestedPartySize > serviceCapacity) {
             return {
@@ -26,23 +27,21 @@ export class CapacityAvailabilityService {
             };
         }
 
-        if (serviceCapacity === 1) {
-            // 1-on-1 service: capacity is 1
-            return { hasCapacity: true, availableCapacity: 1 };
-        }
-
         let confirmedCount = 0;
         let holdCount = 0;
 
         const prismaAny = this.prisma as any;
 
-        // Count confirmed/pending appointments overlapping candidate interval
+        // Count confirmed/in-progress appointments overlapping candidate interval
         if (prismaAny.appointment) {
             const appointments = await prismaAny.appointment.findMany({
                 where: {
                     organizationId,
                     locationId,
-                    serviceId,
+                    OR: [
+                        { serviceId },
+                        ...(staffId ? [{ staffId }] : []),
+                    ],
                     status: { notIn: ["CANCELLED", "NO_SHOW"] },
                     startAt: { lt: candidateInterval.end.toDate() },
                     endAt: { gt: candidateInterval.start.toDate() },
@@ -60,8 +59,11 @@ export class CapacityAvailabilityService {
                 where: {
                     organizationId,
                     locationId,
-                    serviceId,
-                    status: "HELD",
+                    OR: [
+                        { serviceId },
+                        ...(staffId ? [{ staffId }] : []),
+                    ],
+                    status: { in: ["ACTIVE", "HELD"] },
                     expiresAt: { gt: now },
                     startAt: { lt: candidateInterval.end.toDate() },
                     endAt: { gt: candidateInterval.start.toDate() },
@@ -78,7 +80,7 @@ export class CapacityAvailabilityService {
             return {
                 hasCapacity: false,
                 availableCapacity: Math.max(0, availableCapacity),
-                reason: `Insufficient capacity: remaining ${availableCapacity} < requested ${requestedPartySize}`,
+                reason: `Insufficient capacity: remaining ${Math.max(0, availableCapacity)} < requested ${requestedPartySize}`,
             };
         }
 

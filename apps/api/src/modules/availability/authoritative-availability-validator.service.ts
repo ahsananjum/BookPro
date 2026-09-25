@@ -14,7 +14,7 @@ import { EffectiveOperatingWindowBuilder } from "./effective-operating-window-bu
 import { StaffAvailabilityBuilder } from "./staff-availability-builder";
 import { ResourceAvailabilityService } from "./resource-availability.service";
 import { CapacityAvailabilityService } from "./capacity-availability.service";
-import { Instant, LocalDate, TimeInterval } from "@bookpro/server-core";
+import { Instant, LocalDate, TimeInterval, resolveInstantToLocalDate } from "@bookpro/server-core";
 import { Appointment, BookingHold, Prisma } from "@prisma/client";
 import { organizationBookingDate } from "../appointments/booking-date.util";
 
@@ -241,12 +241,7 @@ export class AuthoritativeAvailabilityValidatorService {
 
         // 7. Location Operating Hours & Holidays
         const locationTimezone = location.timezone || "UTC";
-        const startDateUtc = startInstant.toDate();
-        const startLocalDate = new LocalDate(
-            startDateUtc.getUTCFullYear(),
-            startDateUtc.getUTCMonth() + 1,
-            startDateUtc.getUTCDate(),
-        );
+        const startLocalDate = resolveInstantToLocalDate(startInstant, locationTimezone);
 
         const opWindows = this.operatingWindowBuilder.buildOperatingWindows(
             startLocalDate,
@@ -256,19 +251,16 @@ export class AuthoritativeAvailabilityValidatorService {
         );
 
         const fallsWithinOperatingHours = opWindows.some((w) => this.intervalEncloses(w, occupiedInterval));
-        if (!fallsWithinOperatingHours && opWindows.length > 0) {
-            // Also check previous/next day in case of timezone/DST boundary
-            const fitsAnyWindow = opWindows.some((w) => this.intervalEncloses(w, occupiedInterval));
-            if (!fitsAnyWindow) {
+        if (!fallsWithinOperatingHours) {
+            if (opWindows.length === 0) {
                 throw new ConflictException({
-                    code: "OUTSIDE_OPERATING_HOURS",
-                    message: "The requested time slot falls outside location operating hours or during a holiday.",
+                    code: "LOCATION_CLOSED",
+                    message: "Location is closed on the requested date.",
                 });
             }
-        } else if (opWindows.length === 0) {
             throw new ConflictException({
-                code: "LOCATION_CLOSED",
-                message: "Location is closed on the requested date.",
+                code: "OUTSIDE_OPERATING_HOURS",
+                message: "The requested time slot falls outside location operating hours or holiday closure.",
             });
         }
 
@@ -294,6 +286,7 @@ export class AuthoritativeAvailabilityValidatorService {
                     staff.leaves,
                     staff.scheduleBlocks,
                     staff.id,
+                    locationId,
                 );
 
                 const isWithinStaffWorking = workingIntervals.some((wi) => this.intervalEncloses(wi, occupiedInterval));
@@ -323,7 +316,7 @@ export class AuthoritativeAvailabilityValidatorService {
             where: {
                 organizationId,
                 locationId,
-                status: "ACTIVE",
+                status: { in: ["ACTIVE", "HELD"] },
                 expiresAt: { gt: nowUtc },
                 ...(resolvedStaffId ? { staffId: resolvedStaffId } : {}),
                 startAt: { lt: occupiedInterval.end.toDate() },
@@ -710,11 +703,7 @@ export class AuthoritativeAvailabilityValidatorService {
 
                 // Location Operating Hours & Holidays
                 const locationTimezone = location.timezone || "UTC";
-                const startLocalDate = new LocalDate(
-                    startDate.getUTCFullYear(),
-                    startDate.getUTCMonth() + 1,
-                    startDate.getUTCDate(),
-                );
+                const startLocalDate = resolveInstantToLocalDate(startInstant, locationTimezone);
                 const opWindows = this.operatingWindowBuilder.buildOperatingWindows(
                     startLocalDate,
                     locationTimezone,
@@ -724,6 +713,12 @@ export class AuthoritativeAvailabilityValidatorService {
 
                 const fitsOpWindow = opWindows.some((w) => this.intervalEncloses(w, occupiedInterval));
                 if (!fitsOpWindow) {
+                    if (opWindows.length === 0) {
+                        throw new ConflictException({
+                            code: "LOCATION_CLOSED",
+                            message: "Location is closed on the requested date.",
+                        });
+                    }
                     throw new ConflictException({
                         code: "OUTSIDE_OPERATING_HOURS",
                         message: "The requested time slot falls outside location operating hours or holiday closure.",
@@ -745,6 +740,7 @@ export class AuthoritativeAvailabilityValidatorService {
                         resolvedStaffProfile.leaves,
                         blocks,
                         staffId,
+                        locationId,
                     );
 
                     const isWorking = workingIntervals.some((wi) => this.intervalEncloses(wi, occupiedInterval));
@@ -785,7 +781,7 @@ export class AuthoritativeAvailabilityValidatorService {
                         organizationId,
                         locationId,
                         ...(currentConvertingHoldId ? { id: { not: currentConvertingHoldId } } : {}),
-                        status: "ACTIVE",
+                        status: { in: ["ACTIVE", "HELD"] },
                         expiresAt: { gt: new Date() },
                         ...(staffId ? { staffId } : {}),
                         startAt: { lt: occupiedInterval.end.toDate() },
@@ -820,7 +816,7 @@ export class AuthoritativeAvailabilityValidatorService {
                             locationId,
                             serviceId,
                             ...(currentConvertingHoldId ? { id: { not: currentConvertingHoldId } } : {}),
-                            status: "ACTIVE",
+                            status: { in: ["ACTIVE", "HELD"] },
                             expiresAt: { gt: new Date() },
                             startAt: { lt: occupiedInterval.end.toDate() },
                             endAt: { gt: occupiedInterval.start.toDate() },

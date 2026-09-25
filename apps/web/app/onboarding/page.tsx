@@ -99,6 +99,7 @@ function OnboardingWizard() {
         bufferAfterMin: 0,
         depositType: "NONE",
         depositValue: "0",
+        capacity: 1,
     });
 
     // Step 6: First Staff

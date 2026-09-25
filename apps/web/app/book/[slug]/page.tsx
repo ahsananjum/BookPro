@@ -194,6 +194,7 @@ export default function PublicBookingPage() {
   >("IDLE");
   const [slotFetchError, setSlotFetchError] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [slotRefreshNonce, setSlotRefreshNonce] = useState(0);
 
   // Active Hold State
   const [holdId, setHoldId] = useState<string | null>(null);
@@ -611,8 +612,11 @@ export default function PublicBookingPage() {
         hint.type.startsWith("staff.") ||
         hint.type.startsWith("schedule.") ||
         hint.type.startsWith("booking_hold.") ||
-        hint.type.startsWith("appointment.")
+        hint.type.startsWith("appointment.") ||
+        hint.type.startsWith("service.")
       ) {
+        setSlotRefreshNonce((prev) => prev + 1);
+
         if (hint.type.startsWith("location.")) {
           fetch(`/api/v1/locations?slug=${encodeURIComponent(slug)}`, {
             headers: { "x-tenant-slug": slug },
@@ -649,6 +653,7 @@ export default function PublicBookingPage() {
     if (!slug) return;
     const handleFocus = () => {
       if (holdId) return; // do not disrupt if user is in middle of active hold
+      setSlotRefreshNonce((prev) => prev + 1);
       fetch(`/api/v1/services?slug=${encodeURIComponent(slug)}&activeOnly=true`, {
         headers: { "x-tenant-slug": slug },
       })
@@ -749,7 +754,7 @@ export default function PublicBookingPage() {
     return () => {
       controller.abort();
     };
-  }, [slug, selectedServiceId, selectedLocationId, selectedStaffId, selectedDate, todayStr, maxDateStr]);
+  }, [slug, selectedServiceId, selectedLocationId, selectedStaffId, selectedDate, todayStr, maxDateStr, slotRefreshNonce]);
 
   // Live Ticking Hold Timer protected against clock tampering
   useEffect(() => {

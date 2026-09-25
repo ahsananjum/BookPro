@@ -133,6 +133,16 @@ export class LocalDate {
     equals(other: LocalDate): boolean {
         return this.year === other.year && this.month === other.month && this.day === other.day;
     }
+
+    plusDays(days: number): LocalDate {
+        const d = new Date(Date.UTC(this.year, this.month - 1, this.day));
+        d.setUTCDate(d.getUTCDate() + days);
+        return new LocalDate(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+    }
+
+    minusDays(days: number): LocalDate {
+        return this.plusDays(-days);
+    }
 }
 
 export class LocalTime {
@@ -252,6 +262,69 @@ export function resolveLocalToInstant(
     }
 
     return Instant.fromEpochMs(resolvedMs);
+}
+
+/**
+ * Resolves an authoritative UTC Instant to a LocalDate in a specific IANA timezone.
+ */
+export function resolveInstantToLocalDate(instant: Instant, timeZone: string): LocalDate {
+    if (!isValidIanaTimezone(timeZone)) {
+        throw new Error(`Invalid IANA timezone: ${timeZone}`);
+    }
+    const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    });
+    const parts = formatter.formatToParts(instant.toDate());
+    const partMap: Record<string, string> = {};
+    for (const p of parts) {
+        partMap[p.type] = p.value;
+    }
+    return new LocalDate(
+        parseInt(partMap.year, 10),
+        parseInt(partMap.month, 10),
+        parseInt(partMap.day, 10),
+    );
+}
+
+/**
+ * Resolves an authoritative UTC Instant to a LocalDateTime in a specific IANA timezone.
+ */
+export function resolveInstantToLocal(instant: Instant, timeZone: string): LocalDateTime {
+    if (!isValidIanaTimezone(timeZone)) {
+        throw new Error(`Invalid IANA timezone: ${timeZone}`);
+    }
+    const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour12: false,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+    });
+    const parts = formatter.formatToParts(instant.toDate());
+    const partMap: Record<string, string> = {};
+    for (const p of parts) {
+        partMap[p.type] = p.value;
+    }
+    let hour = parseInt(partMap.hour, 10);
+    if (hour === 24) hour = 0;
+    return new LocalDateTime(
+        new LocalDate(
+            parseInt(partMap.year, 10),
+            parseInt(partMap.month, 10),
+            parseInt(partMap.day, 10),
+        ),
+        new LocalTime(
+            hour,
+            parseInt(partMap.minute, 10),
+            parseInt(partMap.second, 10),
+        ),
+    );
 }
 
 /**

@@ -163,6 +163,7 @@ export class AvailabilityService {
                         staff.leaves,
                         [], // Sched blocks handled in busy repo
                         staff.id,
+                        locationId,
                     );
 
                     if (workingIntervals.length === 0) continue;

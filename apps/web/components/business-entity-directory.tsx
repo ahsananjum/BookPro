@@ -77,7 +77,7 @@ export function BusinessEntityDirectory({ kind }: { kind: EntityKind }) {
 
   function requestBody() {
     if (kind === "staff") return { ...form, roleCode: form.roleCode || "STAFF", bookingVisible: true };
-    if (kind === "services") return { name: form.name, category: form.category || undefined, durationMin: Number(form.durationMin), priceCents: Math.round(Number(form.price) * 100), currency: form.currency.toUpperCase(), preBufferMin: 0, postBufferMin: 0, depositType: "NONE", depositValue: 0, taxBehavior: "EXCLUSIVE", capacity: 1, minParticipants: 1, maxParticipants: 1 };
+    if (kind === "services") return { name: form.name, category: form.category || undefined, durationMin: Number(form.durationMin), priceCents: Math.round(Number(form.price) * 100), currency: form.currency.toUpperCase(), preBufferMin: 0, postBufferMin: 0, depositType: "NONE", depositValue: 0, taxBehavior: "EXCLUSIVE", capacity: form.capacity ? Number(form.capacity) : 1, minParticipants: 1, maxParticipants: form.capacity ? Number(form.capacity) : 1 };
     if (kind === "locations") return { ...form, country: form.country.toUpperCase() };
     return { name: form.name, type: form.type, locationId: form.locationId, quantity: Number(form.quantity) };
   }

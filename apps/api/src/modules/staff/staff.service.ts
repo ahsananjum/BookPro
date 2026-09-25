@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { RedisService } from '@bookpro/server-core';
 import { CreateStaffDto, UpdateStaffDto, SetStaffAvailabilityDto, CreateStaffLeaveDto } from '@bookpro/contracts';
 
 @Injectable()
@@ -10,15 +11,27 @@ export class StaffService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly realtimeService: RealtimeService,
+        @Optional() private readonly redisService?: RedisService,
     ) { }
 
     private async notifyStaffUpdated(organizationId: string, staffId?: string) {
         try {
+            if (this.redisService && this.redisService.getIsConnected()) {
+                await this.redisService.delPrefix(RedisService.buildKey(organizationId, 'availability'));
+            }
             await this.realtimeService.broadcastEvent({
                 type: 'staff.updated',
                 organizationId,
                 entityId: staffId,
                 timestamp: new Date().toISOString(),
+            });
+            await this.realtimeService.broadcastEvent({
+                type: 'schedule.updated',
+                organizationId,
+                entityId: staffId,
+                timestamp: new Date().toISOString(),
+                reconnectStrategy: 'canonical_refetch',
+                metadata: { staffId },
             });
         } catch (err: any) {
             this.logger.warn(`Failed to broadcast realtime staff event: ${err.message}`);

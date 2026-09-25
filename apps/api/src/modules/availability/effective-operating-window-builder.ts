@@ -4,7 +4,9 @@ import {
     LocalTime,
     LocalDateTime,
     TimeInterval,
+    Instant,
     resolveLocalToInstant,
+    resolveInstantToLocalDate,
 } from "@bookpro/server-core";
 
 export interface OperatingHourRule {
@@ -111,49 +113,72 @@ export function normalizeOperatingHours(raw: any): OperatingHourRule[] {
 export class EffectiveOperatingWindowBuilder {
     /**
      * Builds effective operating window intervals for a given date in the location timezone,
-     * excluding location holidays and handling cross-midnight shifts.
+     * evaluating a multi-day frame [date - 1, date] to seamlessly capture cross-midnight hours,
+     * while normalizing timezone-safe location holiday closures.
      */
     buildOperatingWindows(
         date: LocalDate,
         locationTimezone: string,
         operatingHours: any,
-        holidays: { date: Date; isClosed: boolean }[] = [],
+        holidays: { date: Date; isClosed: boolean; name?: string }[] = [],
     ): TimeInterval[] {
-        // Check if the date is closed due to a holiday
-        const isHolidayClosed = (holidays || []).some((h) => {
-            const hDate = new Date(h.date);
-            return (
-                hDate.getUTCFullYear() === date.year &&
-                hDate.getUTCMonth() + 1 === date.month &&
-                hDate.getUTCDate() === date.day &&
-                h.isClosed
-            );
-        });
+        const isClosedOnDate = (d: LocalDate): boolean => {
+            return (holidays || []).some((h) => {
+                try {
+                    const hLocalDate = resolveInstantToLocalDate(Instant.fromDate(new Date(h.date)), locationTimezone);
+                    return hLocalDate.equals(d) && h.isClosed;
+                } catch {
+                    const hDate = new Date(h.date);
+                    return (
+                        hDate.getUTCFullYear() === d.year &&
+                        hDate.getUTCMonth() + 1 === d.month &&
+                        hDate.getUTCDate() === d.day &&
+                        h.isClosed
+                    );
+                }
+            });
+        };
 
-        if (isHolidayClosed) {
+        if (isClosedOnDate(date)) {
             return [];
         }
 
         const normalizedRules = normalizeOperatingHours(operatingHours);
-        const dayOfWeekNum = new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay();
-
-        const rulesForDay = normalizedRules.filter(
-            (h) => h.dayOfWeek === dayOfWeekNum && !h.isClosed,
-        );
-
         const windows: TimeInterval[] = [];
+
+        // 1. Check previous day (date - 1) for overnight shifts that cross into target date
+        const prevDate = date.minusDays(1);
+        if (!isClosedOnDate(prevDate)) {
+            const prevDayOfWeek = prevDate.getDayOfWeek();
+            const prevRules = normalizedRules.filter((r) => r.dayOfWeek === prevDayOfWeek && !r.isClosed);
+            for (const rule of prevRules) {
+                const startTime = LocalTime.parse(rule.startTime);
+                const endTime = LocalTime.parse(rule.endTime);
+                // Only consider rules that cross midnight into date
+                if (!endTime.isAfter(startTime)) {
+                    const startLocal = new LocalDateTime(prevDate, startTime);
+                    const endLocal = new LocalDateTime(date, endTime);
+                    const startInstant = resolveLocalToInstant(startLocal, locationTimezone);
+                    const endInstant = resolveLocalToInstant(endLocal, locationTimezone);
+                    if (endInstant.isAfter(startInstant)) {
+                        windows.push(new TimeInterval(startInstant, endInstant));
+                    }
+                }
+            }
+        }
+
+        // 2. Check current day (date) rules
+        const dayOfWeekNum = date.getDayOfWeek();
+        const rulesForDay = normalizedRules.filter((h) => h.dayOfWeek === dayOfWeekNum && !h.isClosed);
 
         for (const rule of rulesForDay) {
             const startTime = LocalTime.parse(rule.startTime);
             const endTime = LocalTime.parse(rule.endTime);
 
             const startLocal = new LocalDateTime(date, startTime);
-
             let endLocal: LocalDateTime;
-            // Handle cross-midnight shift (e.g. 22:00 to 06:00)
             if (!endTime.isAfter(startTime)) {
-                const nextDayDate = new LocalDate(date.year, date.month, date.day + 1);
-                endLocal = new LocalDateTime(nextDayDate, endTime);
+                endLocal = new LocalDateTime(date.plusDays(1), endTime);
             } else {
                 endLocal = new LocalDateTime(date, endTime);
             }
@@ -161,9 +186,11 @@ export class EffectiveOperatingWindowBuilder {
             const startInstant = resolveLocalToInstant(startLocal, locationTimezone);
             const endInstant = resolveLocalToInstant(endLocal, locationTimezone);
 
-            windows.push(new TimeInterval(startInstant, endInstant));
+            if (endInstant.isAfter(startInstant)) {
+                windows.push(new TimeInterval(startInstant, endInstant));
+            }
         }
 
-        return windows;
+        return TimeInterval.normalizeSet(windows);
     }
 }

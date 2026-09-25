@@ -252,6 +252,58 @@ export function StepService({
                 </div>
             </div>
 
+            {/* Slot Capacity */}
+            <div>
+                <label
+                    htmlFor="svc-capacity"
+                    style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}
+                >
+                    Slot Capacity (Simultaneous Clients)
+                </label>
+                <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
+                    {[1, 2, 5, 10, 20].map((cap) => (
+                        <button
+                            key={cap}
+                            type="button"
+                            onClick={() => onChange("capacity", cap)}
+                            style={{
+                                padding: "6px 12px",
+                                borderRadius: "6px",
+                                border: (data.capacity || 1) === cap ? "1px solid #38bdf8" : "1px solid rgba(255,255,255,0.12)",
+                                backgroundColor: (data.capacity || 1) === cap ? "rgba(2, 132, 199, 0.2)" : "rgba(15, 23, 42, 0.6)",
+                                color: (data.capacity || 1) === cap ? "#38bdf8" : "#cbd5e1",
+                                fontWeight: 700,
+                                fontSize: "12px",
+                                cursor: "pointer",
+                            }}
+                        >
+                            {cap === 1 ? "1 (Single)" : cap}
+                        </button>
+                    ))}
+                </div>
+                <input
+                    id="svc-capacity"
+                    type="number"
+                    min="1"
+                    value={data.capacity || 1}
+                    onChange={(e) => onChange("capacity", Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        backgroundColor: "rgba(15, 23, 42, 0.8)",
+                        color: "#fff",
+                        fontSize: "13px",
+                    }}
+                />
+                <p style={{ color: "#94a3b8", fontSize: "11px", marginTop: "4px" }}>
+                    {(data.capacity || 1) === 1
+                        ? "Individual 1-on-1 session. Slot disappears once booked."
+                        : `Group capacity of ${data.capacity || 1} attendees. Slot remains bookable until all spots fill.`}
+                </p>
+            </div>
+
             {/* Deposit Requirement Policy */}
             <div>
                 <label
