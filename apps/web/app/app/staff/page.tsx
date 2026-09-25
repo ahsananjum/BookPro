@@ -213,6 +213,7 @@ export default function StaffManagementPage() {
   const [profileForm, setProfileForm] = useState<StaffFormData>(INITIAL_STAFF_FORM);
   const [skillInput, setSkillInput] = useState("");
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
+  const [profileModalError, setProfileModalError] = useState<SanitizedError | null>(null);
 
   // Schedule & Breaks Modal
   const [scheduleStaff, setScheduleStaff] = useState<StaffItem | null>(null);
@@ -235,10 +236,11 @@ export default function StaffManagementPage() {
     if (showSpinner) setLoading(true);
     setError(null);
     try {
+      const orgId = user?.organizationId;
       const [staffRes, srvRes, locRes] = await Promise.all([
-        apiFetch<StaffItem[]>("/staff"),
-        apiFetch<ServiceItem[]>("/services"),
-        apiFetch<LocationItem[]>("/locations"),
+        apiFetch<StaffItem[]>("/staff", {}, orgId),
+        apiFetch<ServiceItem[]>("/services", {}, orgId),
+        apiFetch<LocationItem[]>("/locations", {}, orgId),
       ]);
 
       if (staffRes.success && Array.isArray(staffRes.data)) {
@@ -358,6 +360,7 @@ export default function StaffManagementPage() {
     });
     setSkillInput("");
     setProfileErrors({});
+    setProfileModalError(null);
     setShowProfileModal(true);
   };
 
@@ -405,6 +408,7 @@ export default function StaffManagementPage() {
     });
     setSkillInput("");
     setProfileErrors({});
+    setProfileModalError(null);
     setShowProfileModal(true);
   };
 
@@ -505,8 +509,8 @@ export default function StaffManagementPage() {
 
     try {
       const res = editingStaffId
-        ? await apiFetch(`/staff/${editingStaffId}`, { method: "PUT", body: JSON.stringify(payload) })
-        : await apiFetch("/staff", { method: "POST", body: JSON.stringify(payload) });
+        ? await apiFetch(`/staff/${editingStaffId}`, { method: "PUT", body: JSON.stringify(payload) }, user?.organizationId)
+        : await apiFetch("/staff", { method: "POST", body: JSON.stringify(payload) }, user?.organizationId);
 
       if (res.success) {
         setShowProfileModal(false);
@@ -514,10 +518,10 @@ export default function StaffManagementPage() {
         setTimeout(() => setSuccessMessage(null), 4000);
         await fetchAll(false);
       } else {
-        setError(sanitizeErrorMessage(res.error?.message, "Failed to save practitioner profile."));
+        setProfileModalError(sanitizeErrorMessage(res.error?.message, "Failed to save practitioner profile."));
       }
     } catch (err: any) {
-      setError(sanitizeErrorMessage(err.message, "An unexpected error occurred."));
+      setProfileModalError(sanitizeErrorMessage(err.message, "An unexpected error occurred."));
     } finally {
       setSubmitting(false);
     }
@@ -1390,6 +1394,12 @@ export default function StaffManagementPage() {
                   ✕
                 </button>
               </div>
+
+              {profileModalError && (
+                <div style={{ marginBottom: "16px" }}>
+                  <SanitizedAlert error={profileModalError} onDismiss={() => setProfileModalError(null)} />
+                </div>
+              )}
 
               <form onSubmit={handleProfileSubmit} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <div>

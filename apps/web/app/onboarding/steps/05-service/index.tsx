@@ -6,6 +6,8 @@ import { Scissors, MapPin } from "../../../../components/icons";
 export interface ServiceData {
     name: string;
     description: string;
+    category?: string;
+    imageUrl?: string;
     durationMin: number;
     price: string;
     currency: string;
@@ -15,6 +17,9 @@ export interface ServiceData {
     depositType: "NONE" | "PERCENTAGE" | "FIXED";
     depositValue: string;
     capacity?: number;
+    minParticipants?: number;
+    maxParticipants?: number;
+    preparationInstructions?: string;
     taxBehavior?: "EXCLUSIVE" | "INCLUSIVE" | "NONE";
 }
 
@@ -60,7 +65,7 @@ export function StepService({
                 </div>
             )}
 
-            <div style={{ gridColumn: "span 2" }}>
+            <div>
                 <label
                     htmlFor="svc-name"
                     style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}
@@ -93,6 +98,32 @@ export function StepService({
                 )}
             </div>
 
+            <div>
+                <label
+                    htmlFor="svc-category"
+                    style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}
+                >
+                    Category (Optional)
+                </label>
+                <input
+                    id="svc-category"
+                    type="text"
+                    value={data.category || ""}
+                    onChange={(e) => onChange("category", e.target.value)}
+                    placeholder="e.g. Wellness / Consultation / Beauty"
+                    style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        backgroundColor: "rgba(15, 23, 42, 0.8)",
+                        color: "#fff",
+                        fontSize: "14px",
+                        outline: "none",
+                    }}
+                />
+            </div>
+
             <div style={{ gridColumn: "span 2" }}>
                 <label
                     htmlFor="svc-desc"
@@ -116,6 +147,32 @@ export function StepService({
                         fontSize: "13px",
                         outline: "none",
                         resize: "vertical",
+                    }}
+                />
+            </div>
+
+            <div style={{ gridColumn: "span 2" }}>
+                <label
+                    htmlFor="svc-prep"
+                    style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}
+                >
+                    Client Preparation Instructions (Optional)
+                </label>
+                <input
+                    id="svc-prep"
+                    type="text"
+                    value={data.preparationInstructions || ""}
+                    onChange={(e) => onChange("preparationInstructions", e.target.value)}
+                    placeholder="e.g. Please arrive 10 minutes before session. Wear comfortable attire."
+                    style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        backgroundColor: "rgba(15, 23, 42, 0.8)",
+                        color: "#fff",
+                        fontSize: "13px",
+                        outline: "none",
                     }}
                 />
             </div>

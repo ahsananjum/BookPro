@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ReferenceCountryDto } from "@bookpro/contracts";
+import { ReferenceCountryDto, ReferenceTimezoneDto } from "@bookpro/contracts";
 
 export interface LocationOperatingDay {
     active: boolean;
@@ -18,14 +18,18 @@ export interface LocationData {
     postalCode: string;
     country: string;
     phone: string;
+    email?: string;
+    timezone?: string;
     taxRatePct: string;
     instructions: string;
+    parkingAccess?: string;
     operatingHours: Record<string, LocationOperatingDay>;
 }
 
 interface StepLocationProps {
     data: LocationData;
     countries: ReferenceCountryDto[];
+    timezones?: ReferenceTimezoneDto[];
     onChange: (field: keyof LocationData, value: any) => void;
     errors: Partial<Record<keyof LocationData, string>>;
 }
@@ -43,6 +47,7 @@ const DAYS_OF_WEEK = [
 export function StepLocation({
     data,
     countries,
+    timezones,
     onChange,
     errors,
 }: StepLocationProps) {
@@ -228,19 +233,103 @@ export function StepLocation({
                     />
                 </div>
 
+                <div>
+                    <label
+                        htmlFor="loc-email"
+                        style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}
+                    >
+                        Branch Contact Email
+                    </label>
+                    <input
+                        id="loc-email"
+                        type="email"
+                        value={data.email || ""}
+                        onChange={(e) => onChange("email", e.target.value)}
+                        placeholder="branch@yourcompany.com"
+                        style={{
+                            width: "100%",
+                            padding: "12px",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            backgroundColor: "rgba(15, 23, 42, 0.8)",
+                            color: "#fff",
+                            fontSize: "14px",
+                            outline: "none",
+                        }}
+                    />
+                </div>
+
+                {timezones && timezones.length > 0 && (
+                    <div>
+                        <label
+                            htmlFor="loc-timezone"
+                            style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}
+                        >
+                            Branch Time Zone
+                        </label>
+                        <select
+                            id="loc-timezone"
+                            value={data.timezone || ""}
+                            onChange={(e) => onChange("timezone", e.target.value)}
+                            style={{
+                                width: "100%",
+                                padding: "12px",
+                                borderRadius: "8px",
+                                border: "1px solid rgba(255,255,255,0.12)",
+                                backgroundColor: "#0f172a",
+                                color: "#fff",
+                                fontSize: "14px",
+                                outline: "none",
+                            }}
+                        >
+                            {timezones.map((tz) => (
+                                <option key={tz.name} value={tz.name}>
+                                    {tz.label || tz.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
+                <div style={{ gridColumn: "span 2" }}>
+                    <label
+                        htmlFor="loc-parking"
+                        style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}
+                    >
+                        Parking Access Information
+                    </label>
+                    <input
+                        id="loc-parking"
+                        type="text"
+                        value={data.parkingAccess || ""}
+                        onChange={(e) => onChange("parkingAccess", e.target.value)}
+                        placeholder="e.g. Free validated parking in rear garage level P2"
+                        style={{
+                            width: "100%",
+                            padding: "12px",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            backgroundColor: "rgba(15, 23, 42, 0.8)",
+                            color: "#fff",
+                            fontSize: "14px",
+                            outline: "none",
+                        }}
+                    />
+                </div>
+
                 <div style={{ gridColumn: "span 2" }}>
                     <label
                         htmlFor="loc-instructions"
                         style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}
                     >
-                        Customer Arrival & Parking Notes
+                        Customer Arrival & Check-In Notes
                     </label>
                     <input
                         id="loc-instructions"
                         type="text"
                         value={data.instructions}
                         onChange={(e) => onChange("instructions", e.target.value)}
-                        placeholder="e.g. Parking available behind the building. Ring buzzer #4 for entrance."
+                        placeholder="e.g. Buzz #400 at the glass entrance. Have a seat in reception."
                         style={{
                             width: "100%",
                             padding: "12px",

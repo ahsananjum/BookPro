@@ -12,8 +12,8 @@ export const ianaTimezoneSchema = z.string().refine((val) => {
 export const operatingHourIntervalSchema = z.object({
     start: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Format HH:mm'),
     end: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Format HH:mm'),
-}).strict().refine(data => data.end > data.start, {
-    message: 'End time must be after start time',
+}).strict().refine(data => data.start !== data.end, {
+    message: 'Start time and end time cannot be identical',
 });
 
 export const updateOrganizationSchema = z.object({
@@ -70,6 +70,7 @@ export const createLocationSchema = z.object({
     parkingAccess: z.string().max(2_000).optional(),
     taxRatePct: z.number().min(0).max(100).optional(),
     staffIds: z.array(z.string().uuid()).optional(),
+    isActive: z.boolean().optional().default(true),
 }).strict();
 
 export const updateLocationSchema = createLocationSchema.partial().extend({
@@ -101,6 +102,7 @@ export const createStaffSchema = z.object({
         customPriceCents: z.number().int().min(0).optional(),
         customDurationMin: z.number().int().min(1).optional(),
     })).max(100).optional(),
+    isActive: z.boolean().optional().default(true),
 }).strict();
 
 export const updateStaffSchema = createStaffSchema.partial().extend({
@@ -159,6 +161,7 @@ export const createServiceSchema = z.object({
         poolId: z.string().uuid(),
         quantity: z.number().int().min(1),
     }).strict()).max(100).optional(),
+    isActive: z.boolean().optional().default(true),
 }).strict();
 
 export const updateServiceSchema = createServiceSchema.partial().extend({

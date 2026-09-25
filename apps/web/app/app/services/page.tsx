@@ -32,6 +32,7 @@ import { GlassCard, GlassBadge } from "../../../components/glass-card";
 import { formatCurrency, getCurrencySymbol } from "../../../lib/currency-utils";
 import { sanitizeErrorMessage, SanitizedError } from "../../../lib/error-utils";
 import { SanitizedAlert } from "../../../components/sanitized-alert";
+import { useAuth } from "../../../lib/auth-context";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   SpotlightCard,
@@ -158,6 +159,7 @@ const INITIAL_FORM_STATE: ServiceFormData = {
 type ModalTab = "general" | "timing" | "pricing" | "dependencies" | "instructions";
 
 export default function ServicesPage() {
+  const { user } = useAuth();
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [staffList, setStaffList] = useState<StaffItem[]>([]);
   const [resourcePools, setResourcePools] = useState<ResourcePool[]>([]);
@@ -165,6 +167,7 @@ export default function ServicesPage() {
   const [org, setOrg] = useState<OrganizationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<SanitizedError | null>(null);
+  const [serviceModalError, setServiceModalError] = useState<SanitizedError | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showAllServices, setShowAllServices] = useState(false);
 
@@ -190,12 +193,13 @@ export default function ServicesPage() {
     if (!silent) setLoading(true);
     setError(null);
 
+    const orgId = user?.organizationId;
     const [servicesRes, orgRes, staffRes, poolsRes, formsRes] = await Promise.all([
-      apiFetch<ServiceItem[]>("/services"),
-      apiFetch<OrganizationData>("/organization/current"),
-      apiFetch<StaffItem[]>("/staff"),
-      apiFetch<ResourcePool[]>("/resources/pools"),
-      apiFetch<IntakeFormItem[]>("/intake-forms"),
+      apiFetch<ServiceItem[]>("/services", {}, orgId),
+      apiFetch<OrganizationData>("/organization/current", {}, orgId),
+      apiFetch<StaffItem[]>("/staff", {}, orgId),
+      apiFetch<ResourcePool[]>("/resources/pools", {}, orgId),
+      apiFetch<IntakeFormItem[]>("/intake-forms", {}, orgId),
     ]);
 
     if (servicesRes.success && Array.isArray(servicesRes.data)) {
@@ -295,6 +299,7 @@ export default function ServicesPage() {
       requiredResourcePools: [],
     });
     setFormErrors({});
+    setServiceModalError(null);
     setShowModal(true);
   };
 
@@ -340,6 +345,7 @@ export default function ServicesPage() {
       requiredResourcePools: assignedPools,
     });
     setFormErrors({});
+    setServiceModalError(null);
     setShowModal(true);
   };
 
@@ -382,6 +388,7 @@ export default function ServicesPage() {
       requiredResourcePools: assignedPools,
     });
     setFormErrors({});
+    setServiceModalError(null);
     setShowModal(true);
   };
 
@@ -473,6 +480,16 @@ export default function ServicesPage() {
       errors.minParticipants = "Min participants cannot exceed max participants";
     }
 
+    if (errors.name) {
+      setModalTab("general");
+    } else if (errors.durationMin) {
+      setModalTab("timing");
+    } else if (errors.price || errors.depositValue) {
+      setModalTab("pricing");
+    } else if (errors.capacity || errors.minParticipants) {
+      setModalTab("general");
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -482,7 +499,7 @@ export default function ServicesPage() {
     if (!validateForm()) return;
 
     setSubmitting(true);
-    setError(null);
+    setServiceModalError(null);
 
     const priceCents = Math.round((parseFloat(formData.price) || 0) * 100);
 
@@ -520,9 +537,10 @@ export default function ServicesPage() {
     };
 
     try {
+      const orgId = org?.id || user?.organizationId;
       const res = editingServiceId
-        ? await apiFetch<any>(`/services/${editingServiceId}`, { method: "PUT", body: JSON.stringify(payload) })
-        : await apiFetch<any>("/services", { method: "POST", body: JSON.stringify(payload) });
+        ? await apiFetch<any>(`/services/${editingServiceId}`, { method: "PUT", body: JSON.stringify(payload) }, orgId)
+        : await apiFetch<any>("/services", { method: "POST", body: JSON.stringify(payload) }, orgId);
 
       if (res.success) {
         setShowModal(false);
@@ -530,10 +548,10 @@ export default function ServicesPage() {
         setTimeout(() => setSuccessMessage(null), 4000);
         await loadData();
       } else {
-        setError(sanitizeErrorMessage(res.error?.message, "Failed to save service. Please review the inputs."));
+        setServiceModalError(sanitizeErrorMessage(res.error?.message, "Failed to save service. Please review the inputs."));
       }
     } catch (err: any) {
-      setError(sanitizeErrorMessage(err.message, "An unexpected network error occurred."));
+      setServiceModalError(sanitizeErrorMessage(err.message, "An unexpected network error occurred."));
     } finally {
       setSubmitting(false);
     }
@@ -1336,6 +1354,12 @@ export default function ServicesPage() {
                     ✕
                   </button>
                 </div>
+
+                {serviceModalError && (
+                  <div style={{ marginBottom: "16px" }}>
+                    <SanitizedAlert error={serviceModalError} onDismiss={() => setServiceModalError(null)} />
+                  </div>
+                )}
 
                 {/* Modal Tabs */}
                 <div

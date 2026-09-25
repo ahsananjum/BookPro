@@ -49,6 +49,7 @@ export interface CreateLocationDto {
     parkingAccess?: string;
     taxRatePct?: number;
     staffIds?: string[];
+    isActive?: boolean;
 }
 
 export interface UpdateLocationDto extends Partial<CreateLocationDto> {
@@ -130,6 +131,7 @@ export interface CreateStaffDto {
     locationIds?: string[];
     serviceIds?: string[];
     serviceOverrides?: StaffServiceOverrideDto[];
+    isActive?: boolean;
 }
 
 export interface UpdateStaffDto extends Partial<CreateStaffDto> {
@@ -178,6 +180,7 @@ export interface CreateServiceDto {
     eligibleLocationIds?: string[];
     eligibleStaffIds?: string[];
     intakeFormIds?: string[];
+    isActive?: boolean;
     staffPricing?: Array<{
         staffId: string;
         customPriceCents?: number;

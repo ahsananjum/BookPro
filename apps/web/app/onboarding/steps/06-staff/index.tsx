@@ -11,6 +11,9 @@ export interface StaffData {
     title: string;
     bio: string;
     roleCode: "STAFF" | "MANAGER" | "ADMIN";
+    calendarColor?: string;
+    bookingVisible?: boolean;
+    skills?: string[];
 }
 
 interface StepStaffProps {
@@ -260,6 +263,47 @@ export function StepStaff({
                             resize: "vertical",
                         }}
                     />
+                </div>
+
+                <div>
+                    <label style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}>
+                        Calendar Badge Color
+                    </label>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        {["#0284c7", "#10b981", "#8b5cf6", "#f43f5e", "#f59e0b", "#6366f1", "#14b8a6"].map((color) => (
+                            <div
+                                key={color}
+                                onClick={() => onChange("calendarColor", color)}
+                                style={{
+                                    width: "28px",
+                                    height: "28px",
+                                    borderRadius: "50%",
+                                    backgroundColor: color,
+                                    cursor: "pointer",
+                                    border: (data.calendarColor || "#0284c7") === color ? "3px solid #fff" : "2px solid transparent",
+                                    boxShadow: (data.calendarColor || "#0284c7") === color ? "0 0 10px " + color : "none",
+                                    transition: "all 0.15s ease",
+                                }}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                <div>
+                    <label style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}>
+                        Online Booking Portal Visibility
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", marginTop: "8px" }}>
+                        <input
+                            type="checkbox"
+                            checked={data.bookingVisible !== false}
+                            onChange={(e) => onChange("bookingVisible", e.target.checked)}
+                            style={{ width: "16px", height: "16px", accentColor: "#0284c7" }}
+                        />
+                        <span style={{ fontSize: "13px", color: "#cbd5e1" }}>
+                            Display this practitioner on the public customer booking page
+                        </span>
+                    </label>
                 </div>
             </div>
         </div>

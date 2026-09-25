@@ -34,6 +34,7 @@ import { useRealtimeEvents } from "../../../lib/use-realtime-events";
 import { ClockSpinner } from "../../../components/animated-svgs";
 import { sanitizeErrorMessage, SanitizedError } from "../../../lib/error-utils";
 import { SanitizedAlert } from "../../../components/sanitized-alert";
+import { useAuth } from "../../../lib/auth-context";
 
 interface AssignedStaff {
   staff: {
@@ -206,13 +207,15 @@ function getTodayOperatingStatus(rawHours: any, tz: string): { isOpen: boolean; 
 }
 
 export default function LocationsPage() {
-  const { timezones } = useReferenceData();
+  const { timezones, countries } = useReferenceData();
 
+  const { user } = useAuth();
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [org, setOrg] = useState<OrganizationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<SanitizedError | null>(null);
+  const [locationModalError, setLocationModalError] = useState<SanitizedError | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showAllLocations, setShowAllLocations] = useState(false);
 
@@ -235,11 +238,12 @@ export default function LocationsPage() {
   const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const orgId = org?.id || user?.organizationId;
     try {
       const [locRes, orgRes, staffRes] = await Promise.all([
-        apiFetch<LocationItem[]>("/locations"),
-        apiFetch<OrganizationData>("/organization/current"),
-        apiFetch<StaffMember[]>("/staff"),
+        apiFetch<LocationItem[]>("/locations", {}, orgId),
+        apiFetch<OrganizationData>("/organization/current", {}, orgId),
+        apiFetch<StaffMember[]>("/staff", {}, orgId),
       ]);
 
       if (locRes.success && Array.isArray(locRes.data)) {
@@ -341,6 +345,7 @@ export default function LocationsPage() {
       staffIds: staffMembers.map((s) => s.id), // default assign all staff
     });
     setFormErrors({});
+    setLocationModalError(null);
     setModalTab("general");
     setShowModal(true);
   };
@@ -366,6 +371,7 @@ export default function LocationsPage() {
       staffIds: assignedStaffIds,
     });
     setFormErrors({});
+    setLocationModalError(null);
     setModalTab(tab);
     setShowModal(true);
   };
@@ -373,12 +379,19 @@ export default function LocationsPage() {
   const handleFormFieldChange = <K extends keyof LocationFormData>(field: K, value: LocationFormData[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (field === "name" && !editingLocationId) {
-      const autoSlug = String(value)
+      const baseSlug = String(value)
         .toLowerCase()
         .trim()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "");
-      setFormData((prev) => ({ ...prev, slug: autoSlug }));
+      
+      let candidateSlug = baseSlug;
+      let counter = 2;
+      while (locations.some((l) => l.slug === candidateSlug)) {
+        candidateSlug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+      setFormData((prev) => ({ ...prev, slug: candidateSlug }));
     }
     if (formErrors[field]) {
       setFormErrors((prev) => {
@@ -434,13 +447,20 @@ export default function LocationsPage() {
     const errors: Record<string, string> = {};
     if (!formData.name.trim()) errors.name = "Branch location name is required";
     if (!formData.timezone) errors.timezone = "Time zone is required";
+    if (!formData.slug.trim()) errors.slug = "Branch URL slug is required";
 
-    // Validate operating hours
+    // Validate operating hours: error only if start and end are identical (0-duration shift)
     for (const [dayKey, schedule] of Object.entries(formData.operatingHours)) {
-      if (schedule.active && schedule.open >= schedule.close) {
-        errors.hours = `Invalid hours on ${dayKey.toUpperCase()}: Closing time must be after opening time.`;
+      if (schedule.active && schedule.open && schedule.close && schedule.open === schedule.close) {
+        errors.hours = `Invalid hours on ${dayKey.toUpperCase()}: Opening and closing time cannot be identical.`;
         break;
       }
+    }
+
+    if (errors.name || errors.timezone || errors.slug) {
+      setModalTab("general");
+    } else if (errors.hours) {
+      setModalTab("hours");
     }
 
     setFormErrors(errors);
@@ -452,11 +472,11 @@ export default function LocationsPage() {
     if (!validateForm()) return;
 
     setSubmitting(true);
-    setError(null);
+    setLocationModalError(null);
 
     const transformedHours: Record<string, Array<{ start: string; end: string }>> = {};
     for (const [dayKey, dayVal] of Object.entries(formData.operatingHours)) {
-      if (dayVal.active && dayVal.open && dayVal.close && dayVal.close > dayVal.open) {
+      if (dayVal.active && dayVal.open && dayVal.close && dayVal.open !== dayVal.close) {
         transformedHours[dayKey.toLowerCase()] = [{ start: dayVal.open, end: dayVal.close }];
       } else {
         transformedHours[dayKey.toLowerCase()] = [];
@@ -482,9 +502,10 @@ export default function LocationsPage() {
     };
 
     try {
+      const orgId = org?.id || user?.organizationId;
       const res = editingLocationId
-        ? await apiFetch(`/locations/${editingLocationId}`, { method: "PUT", body: JSON.stringify(payload) })
-        : await apiFetch("/locations", { method: "POST", body: JSON.stringify(payload) });
+        ? await apiFetch(`/locations/${editingLocationId}`, { method: "PUT", body: JSON.stringify(payload) }, orgId)
+        : await apiFetch("/locations", { method: "POST", body: JSON.stringify(payload) }, orgId);
 
       if (res.success) {
         setShowModal(false);
@@ -492,10 +513,10 @@ export default function LocationsPage() {
         setTimeout(() => setSuccessMessage(null), 4000);
         await fetchAllData();
       } else {
-        setError(sanitizeErrorMessage(res.error?.message, "Failed to save branch location."));
+        setLocationModalError(sanitizeErrorMessage(res.error?.message, "Failed to save branch location."));
       }
     } catch (err: any) {
-      setError(sanitizeErrorMessage(err.message, "An unexpected error occurred."));
+      setLocationModalError(sanitizeErrorMessage(err.message, "An unexpected error occurred."));
     } finally {
       setSubmitting(false);
     }
@@ -1126,6 +1147,12 @@ export default function LocationsPage() {
                 </button>
               </div>
 
+              {locationModalError && (
+                <div style={{ marginBottom: "16px" }}>
+                  <SanitizedAlert error={locationModalError} onDismiss={() => setLocationModalError(null)} />
+                </div>
+              )}
+
               {/* Modal Navigation Tabs */}
               <div
                 style={{
@@ -1208,6 +1235,24 @@ export default function LocationsPage() {
                         style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", border: formErrors.name ? "1px solid #fb7185" : "1px solid rgba(255, 255, 255, 0.12)", backgroundColor: "rgba(15, 23, 42, 0.8)", color: "#fff", fontSize: "13.5px" }}
                       />
                       {formErrors.name && <p style={{ color: "#fb7185", fontSize: "12px", marginTop: "4px" }}>{formErrors.name}</p>}
+                    </div>
+
+                    <div style={{ gridColumn: "span 2" }}>
+                      <label style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}>
+                        Branch URL Slug <span style={{ color: "#38bdf8" }}>*</span>
+                      </label>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ color: "#64748b", fontSize: "13px", fontFamily: "monospace" }}>/locations/</span>
+                        <input
+                          type="text"
+                          required
+                          value={formData.slug}
+                          onChange={(e) => handleFormFieldChange("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                          placeholder="e.g. downtown-studio"
+                          style={{ flex: 1, padding: "10px 14px", borderRadius: "8px", border: formErrors.slug ? "1px solid #fb7185" : "1px solid rgba(255, 255, 255, 0.12)", backgroundColor: "rgba(15, 23, 42, 0.8)", color: "#fff", fontSize: "13px" }}
+                        />
+                      </div>
+                      {formErrors.slug && <p style={{ color: "#fb7185", fontSize: "12px", marginTop: "4px" }}>{formErrors.slug}</p>}
                     </div>
 
                     <div>
@@ -1306,6 +1351,36 @@ export default function LocationsPage() {
                         placeholder="CA"
                         style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.12)", backgroundColor: "rgba(15, 23, 42, 0.8)", color: "#fff", fontSize: "13px" }}
                       />
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}>
+                        Postal Code / ZIP
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.postalCode}
+                        onChange={(e) => handleFormFieldChange("postalCode", e.target.value)}
+                        placeholder="e.g. 94103"
+                        style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.12)", backgroundColor: "rgba(15, 23, 42, 0.8)", color: "#fff", fontSize: "13px" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}>
+                        Country
+                      </label>
+                      <select
+                        value={formData.country}
+                        onChange={(e) => handleFormFieldChange("country", e.target.value)}
+                        style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.12)", backgroundColor: "#0f172a", color: "#fff", fontSize: "13px" }}
+                      >
+                        {countries.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.name} ({c.code})
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div style={{ gridColumn: "span 2" }}>

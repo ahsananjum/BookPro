@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { RedisService } from '@bookpro/server-core';
@@ -97,16 +97,25 @@ export class LocationService {
     }
 
     async createLocation(organizationId: string, dto: CreateLocationDto) {
+        // Prevent silent overwrite and ensure distinct branch identity
         const existing = await this.prisma.location.findFirst({
             where: {
                 organizationId,
                 slug: dto.slug,
-                archivedAt: null,
             },
         });
 
         if (existing) {
-            return this.updateLocation(organizationId, existing.id, dto);
+            if (!existing.archivedAt) {
+                throw new ConflictException(
+                    `A branch location with slug '${dto.slug}' already exists in your organization. Please choose a unique branch name or slug.`
+                );
+            }
+            // If previous branch with this slug was archived, free up the slug
+            await this.prisma.location.update({
+                where: { id: existing.id },
+                data: { slug: `${existing.slug}_archived_${Date.now()}` },
+            });
         }
 
         const created = await this.prisma.$transaction(async (tx) => {
@@ -171,7 +180,23 @@ export class LocationService {
     }
 
     async updateLocation(organizationId: string, locationId: string, dto: UpdateLocationDto) {
-        await this.getLocationById(organizationId, locationId);
+        const currentLoc = await this.getLocationById(organizationId, locationId);
+
+        if (dto.slug && dto.slug !== currentLoc.slug) {
+            const conflict = await this.prisma.location.findFirst({
+                where: {
+                    organizationId,
+                    slug: dto.slug,
+                    id: { not: locationId },
+                    archivedAt: null,
+                },
+            });
+            if (conflict) {
+                throw new ConflictException(
+                    `A branch location with slug '${dto.slug}' already exists in your organization.`
+                );
+            }
+        }
 
         await this.prisma.$transaction(async (tx) => {
             await tx.location.update({
@@ -257,7 +282,7 @@ export class LocationService {
     }
 
     async archiveLocation(organizationId: string, locationId: string) {
-        await this.getLocationById(organizationId, locationId);
+        const loc = await this.getLocationById(organizationId, locationId);
 
         // Safety Guard: Organizations must maintain at least one active branch
         const activeCount = await this.prisma.location.count({
@@ -275,7 +300,10 @@ export class LocationService {
 
         const updated = await this.prisma.location.update({
             where: { id: locationId },
-            data: { archivedAt: new Date() },
+            data: {
+                archivedAt: new Date(),
+                slug: `${loc.slug}_archived_${Date.now()}`,
+            },
         });
 
         await this.invalidateAvailabilityCache(organizationId);

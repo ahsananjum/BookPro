@@ -76,8 +76,11 @@ function OnboardingWizard() {
         postalCode: "",
         country: "US",
         phone: "",
+        email: "",
+        timezone: "UTC",
         taxRatePct: "0",
         instructions: "",
+        parkingAccess: "",
         operatingHours: {
             monday: { active: true, open: "09:00", close: "18:00" },
             tuesday: { active: true, open: "09:00", close: "18:00" },
@@ -93,6 +96,8 @@ function OnboardingWizard() {
     const [serviceData, setServiceData] = useState<ServiceData>({
         name: "",
         description: "",
+        category: "",
+        preparationInstructions: "",
         durationMin: 45,
         price: "35.00",
         currency: "USD",
@@ -111,6 +116,8 @@ function OnboardingWizard() {
         title: "Principal Practitioner",
         bio: "",
         roleCode: "STAFF",
+        calendarColor: "#0284c7",
+        bookingVisible: true,
     });
 
     // Step 7: Availability
@@ -229,8 +236,11 @@ function OnboardingWizard() {
                 postalCode: loc.postalCode || "",
                 country: loc.country || org.country || "US",
                 phone: loc.phone || "",
+                email: (loc as any).email || "",
+                timezone: loc.timezone || org.timezone || "UTC",
                 taxRatePct: loc.taxRatePct !== null ? String(loc.taxRatePct) : "0",
                 instructions: loc.instructions || "",
+                parkingAccess: (loc as any).parkingAccess || "",
                 operatingHours: parsedHours,
             });
         }
@@ -241,6 +251,7 @@ function OnboardingWizard() {
             const svc = status.firstService;
             setServiceData({
                 name: svc.name,
+                category: (svc as any).category || "",
                 description: svc.description || "",
                 durationMin: svc.durationMin || 45,
                 price: (svc.priceCents / 100).toFixed(2),
@@ -248,6 +259,7 @@ function OnboardingWizard() {
                 bufferAfterMin: svc.bufferAfterMin || 0,
                 depositType: (svc.depositType as any) || "NONE",
                 depositValue: svc.depositValue !== null ? String(svc.depositValue) : "0",
+                preparationInstructions: (svc as any).preparationInstructions || "",
             });
         }
 
@@ -263,6 +275,8 @@ function OnboardingWizard() {
                 title: stf.title || "Principal Practitioner",
                 bio: stf.bio || "",
                 roleCode: (stf.roleCode as any) || "STAFF",
+                calendarColor: (stf as any).calendarColor || "#0284c7",
+                bookingVisible: (stf as any).bookingVisible !== false,
             });
         } else if (user) {
             setStaffData((prev) => ({
@@ -270,6 +284,8 @@ function OnboardingWizard() {
                 fullName: user.fullName || "",
                 displayName: user.fullName || "",
                 email: user.email || "",
+                calendarColor: "#0284c7",
+                bookingVisible: true,
             }));
         }
 
@@ -415,7 +431,7 @@ function OnboardingWizard() {
         const transformedHours: Record<string, Array<{ start: string; end: string }>> = {};
         if (locationData.operatingHours && typeof locationData.operatingHours === "object") {
             for (const [dayKey, dayVal] of Object.entries(locationData.operatingHours)) {
-                if (dayVal.active && dayVal.open && dayVal.close && dayVal.close > dayVal.open) {
+                if (dayVal.active && dayVal.open && dayVal.close && dayVal.open !== dayVal.close) {
                     transformedHours[dayKey.toLowerCase()] = [{ start: dayVal.open, end: dayVal.close }];
                 } else {
                     transformedHours[dayKey.toLowerCase()] = [];
@@ -427,16 +443,18 @@ function OnboardingWizard() {
         const payload = {
             name: locationData.name.trim(),
             slug: locationData.slug || autoSlug,
-            timezone: regionalSettings.timezone || "UTC",
+            timezone: locationData.timezone || regionalSettings.timezone || "UTC",
             address: locationData.address.trim() || undefined,
             city: locationData.city.trim() || undefined,
             state: locationData.state.trim() || undefined,
             postalCode: locationData.postalCode.trim() || undefined,
             country: locationData.country || businessDetails.country || "US",
             phone: locationData.phone.trim() || undefined,
+            email: locationData.email?.trim() || undefined,
             taxRatePct: parseFloat(locationData.taxRatePct) || 0,
             operatingHours: transformedHours,
             instructions: locationData.instructions.trim() || undefined,
+            parkingAccess: locationData.parkingAccess?.trim() || undefined,
         };
 
         const res = existingLocationId
@@ -474,6 +492,7 @@ function OnboardingWizard() {
 
         const payload = {
             name: serviceData.name.trim(),
+            category: serviceData.category?.trim() || undefined,
             description: serviceData.description.trim() || undefined,
             durationMin: serviceData.durationMin,
             priceCents: Math.round(priceNum * 100),
@@ -484,6 +503,7 @@ function OnboardingWizard() {
             depositValue: serviceData.depositType !== "NONE" ? parseFloat(serviceData.depositValue) || 0 : 0,
             taxBehavior: serviceData.taxBehavior || "EXCLUSIVE",
             capacity: serviceData.capacity || 1,
+            preparationInstructions: serviceData.preparationInstructions?.trim() || undefined,
             eligibleLocationIds: locationId ? [locationId] : undefined,
         };
 
@@ -536,6 +556,8 @@ function OnboardingWizard() {
             title: staffData.title.trim() || undefined,
             bio: staffData.bio.trim() || undefined,
             roleCode: staffData.mode === "OWNER" ? "OWNER" : staffData.roleCode,
+            calendarColor: staffData.calendarColor || "#0284c7",
+            bookingVisible: staffData.bookingVisible !== false,
             locationIds: locationId ? [locationId] : undefined,
             serviceIds: serviceId ? [serviceId] : undefined,
         };
@@ -817,6 +839,7 @@ function OnboardingWizard() {
                 <StepLocation
                     data={locationData}
                     countries={countries}
+                    timezones={timezones}
                     onChange={(f, v) => {
                         setIsDirty(true);
                         setLocationData((prev) => ({ ...prev, [f]: v }));
