@@ -142,6 +142,7 @@ export interface ServiceItem {
   priceCents: number;
   currency: string;
   category?: string;
+  capacity?: number;
   isActive: boolean;
 }
 
@@ -157,6 +158,8 @@ export interface AvailableSlot {
   slotLocal: string;
   available: boolean;
   staffId?: string;
+  remainingCapacity?: number;
+  capacity?: number;
 }
 
 type ViewMode = "day" | "week" | "month" | "staff" | "queue";
@@ -286,6 +289,9 @@ export default function BusinessCalendarPage() {
   const [newApptError, setNewApptError] = useState<string | null>(null);
   const [queueShowAll, setQueueShowAll] = useState(false);
 
+  const [newPartySize, setNewPartySize] = useState<number>(1);
+  const [slotRefreshNonce, setSlotRefreshNonce] = useState(0);
+
   // --- Real-time SSE Live Sync ---
   const { isConnected: isRealtimeLive } = useRealtimeEvents(orgId, {
     onEvent: (hint) => {
@@ -294,9 +300,12 @@ export default function BusinessCalendarPage() {
         hint.type.startsWith("booking_hold.") ||
         hint.type.startsWith("waitlist.") ||
         hint.type.startsWith("calendar.") ||
-        hint.type.startsWith("staff.")
+        hint.type.startsWith("staff.") ||
+        hint.type.startsWith("schedule.") ||
+        hint.type.startsWith("location.")
       ) {
         fetchAppointments();
+        setSlotRefreshNonce((n) => n + 1);
       }
     },
   });
@@ -454,6 +463,9 @@ export default function BusinessCalendarPage() {
         startDate: `${newApptDate}T00:00:00.000Z`,
         endDate: `${newApptDate}T23:59:59.999Z`,
       });
+      if (newPartySize > 1) {
+        params.append("partySize", String(newPartySize));
+      }
       if (newStaffId && newStaffId !== "UNASSIGNED") {
         params.append("staffId", newStaffId);
       }
@@ -469,6 +481,8 @@ export default function BusinessCalendarPage() {
             slotLocal: s.startLocal || s.slotLocal || s.startAt || s,
             available: s.available !== false,
             staffId: s.staffId,
+            remainingCapacity: typeof s.remainingCapacity === "number" ? s.remainingCapacity : undefined,
+            capacity: typeof s.capacity === "number" ? s.capacity : undefined,
           });
         });
       }
@@ -478,13 +492,13 @@ export default function BusinessCalendarPage() {
     } finally {
       setIsSlotsLoading(false);
     }
-  }, [orgId, newLocationId, newServiceId, newStaffId, newApptDate]);
+  }, [orgId, newLocationId, newServiceId, newStaffId, newApptDate, newPartySize]);
 
   useEffect(() => {
     if (isNewModalOpen) {
       fetchAvailableSlotsForNew();
     }
-  }, [isNewModalOpen, fetchAvailableSlotsForNew]);
+  }, [isNewModalOpen, fetchAvailableSlotsForNew, slotRefreshNonce]);
 
   // --- Fetch Available Slots for Reschedule Drawer ---
   const fetchAvailableSlotsForReschedule = useCallback(async () => {
@@ -514,6 +528,8 @@ export default function BusinessCalendarPage() {
             slotLocal: s.startLocal || s.slotLocal || s.startAt || s,
             available: s.available !== false,
             staffId: s.staffId,
+            remainingCapacity: typeof s.remainingCapacity === "number" ? s.remainingCapacity : undefined,
+            capacity: typeof s.capacity === "number" ? s.capacity : undefined,
           });
         });
       }
@@ -529,7 +545,7 @@ export default function BusinessCalendarPage() {
     if (isRescheduleOpen && selectedAppt) {
       fetchAvailableSlotsForReschedule();
     }
-  }, [isRescheduleOpen, fetchAvailableSlotsForReschedule]);
+  }, [isRescheduleOpen, fetchAvailableSlotsForReschedule, slotRefreshNonce]);
 
   // --- Client-Side Filtered Appointments (Search & Text Query) ---
   const filteredAppointments = useMemo(() => {
@@ -806,6 +822,7 @@ export default function BusinessCalendarPage() {
         organizationId: orgId,
         locationId: newLocationId,
         serviceId: newServiceId,
+        partySize: newPartySize > 1 ? newPartySize : 1,
         staffId: newStaffId && newStaffId !== "UNASSIGNED" ? newStaffId : undefined,
         customerId: customerIdToUse || undefined,
         customerName: customerNameToUse,
@@ -834,6 +851,7 @@ export default function BusinessCalendarPage() {
         setSelectedHoldToOverride(null);
         // Reset form
         setSelectedSlot("");
+        setNewPartySize(1);
         setNewNotes("");
         setNewOverrideReason("");
         setNewCustomerName("");
@@ -2790,13 +2808,20 @@ export default function BusinessCalendarPage() {
                   </label>
                   <select
                     value={newServiceId}
-                    onChange={(e) => setNewServiceId(e.target.value)}
+                    onChange={(e) => {
+                      const newId = e.target.value;
+                      setNewServiceId(newId);
+                      const targetSrv = servicesList.find((s) => s.id === newId);
+                      if (targetSrv?.capacity && newPartySize > targetSrv.capacity) {
+                        setNewPartySize(targetSrv.capacity);
+                      }
+                    }}
                     required
                     style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid #334155", backgroundColor: "#1e293b", color: "#fff", fontSize: "13px" }}
                   >
                     {servicesList.map((srv) => (
                       <option key={srv.id} value={srv.id}>
-                        {srv.name} ({srv.durationMin}m · {formatMoney(srv.priceCents, srv.currency)})
+                        {srv.name} ({srv.durationMin}m · {formatMoney(srv.priceCents, srv.currency)} · {srv.capacity && srv.capacity > 1 ? `Group (Max ${srv.capacity})` : "1-on-1"})
                       </option>
                     ))}
                   </select>
@@ -2820,6 +2845,51 @@ export default function BusinessCalendarPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Dynamic Party Size Selector for Group Services */}
+              {(() => {
+                const currentSrv = servicesList.find((s) => s.id === newServiceId);
+                const maxCap = currentSrv?.capacity || 1;
+                if (maxCap <= 1) return null;
+                return (
+                  <div style={{ backgroundColor: "rgba(56, 189, 248, 0.06)", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "8px", padding: "10px 14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <label style={{ fontSize: "12px", fontWeight: 700, color: "#38bdf8", display: "block" }}>
+                          Party Size / Seat Count (Group Session)
+                        </label>
+                        <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                          Seats requested for this walk-in. Max capacity: {maxCap} guests.
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <input
+                          type="number"
+                          min={1}
+                          max={maxCap}
+                          value={newPartySize}
+                          onChange={(e) => {
+                            const val = Math.max(1, Math.min(maxCap, parseInt(e.target.value, 10) || 1));
+                            setNewPartySize(val);
+                          }}
+                          style={{
+                            width: "60px",
+                            padding: "6px 8px",
+                            borderRadius: "6px",
+                            border: "1px solid #38bdf8",
+                            backgroundColor: "#1e293b",
+                            color: "#fff",
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            textAlign: "center",
+                          }}
+                        />
+                        <span style={{ fontSize: "12px", color: "#cbd5e1" }}>/ {maxCap}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Target Date & Available Slots */}
               <div style={{ backgroundColor: "#131c31", padding: "14px", borderRadius: "8px", border: "1px solid #1e293b" }}>
@@ -2850,6 +2920,7 @@ export default function BusinessCalendarPage() {
                       .map((slot) => {
                         const timeStr = new Date(slot.slotUtc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
                         const isChosen = selectedSlot === slot.slotUtc;
+                        const remainingSpots = slot.remainingCapacity;
                         return (
                           <button
                             key={slot.slotUtc}
@@ -2864,9 +2935,26 @@ export default function BusinessCalendarPage() {
                               fontSize: "12px",
                               fontWeight: isChosen ? 800 : 600,
                               cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
                             }}
                           >
-                            {timeStr}
+                            <span>{timeStr}</span>
+                            {typeof remainingSpots === "number" && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  padding: "1px 4px",
+                                  borderRadius: "4px",
+                                  backgroundColor: isChosen ? "rgba(255, 255, 255, 0.25)" : "rgba(56, 189, 248, 0.15)",
+                                  color: isChosen ? "#fff" : "#38bdf8",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {remainingSpots} left
+                              </span>
+                            )}
                           </button>
                         );
                       })}
@@ -3009,21 +3097,22 @@ export default function BusinessCalendarPage() {
                 </div>
               </div>
 
-              {/* Override Reason (Required if no slot selected) */}
-              {!selectedSlot && (
-                <div>
-                  <label style={{ fontSize: "12px", fontWeight: 700, color: "#f59e0b", display: "block", marginBottom: "4px" }}>
-                    Staff Override Reason (Required if forcing custom slot)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Owner direct override, client walk-in squeeze"
-                    value={newOverrideReason}
-                    onChange={(e) => setNewOverrideReason(e.target.value)}
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid #d97706", backgroundColor: "#1e293b", color: "#fff", fontSize: "13px" }}
-                  />
-                </div>
-              )}
+              {/* Staff Override Protocol */}
+              <div style={{ backgroundColor: !selectedSlot ? "rgba(245, 158, 11, 0.08)" : "transparent", padding: !selectedSlot ? "12px" : "0", borderRadius: "8px", border: !selectedSlot ? "1px solid rgba(245, 158, 11, 0.25)" : "none" }}>
+                <label style={{ fontSize: "12px", fontWeight: 700, color: !selectedSlot ? "#f59e0b" : "#94a3b8", display: "block", marginBottom: "4px" }}>
+                  Staff Override Reason {!selectedSlot ? "(Required to force booking outside regular slots)" : "(Optional: override shift break or capacity limits)"}
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Manager authorized walk-in, shift break exception, VIP squeeze"
+                  value={newOverrideReason}
+                  onChange={(e) => setNewOverrideReason(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: `1px solid ${!selectedSlot ? "#d97706" : "#334155"}`, backgroundColor: "#1e293b", color: "#fff", fontSize: "13px" }}
+                />
+                <p style={{ fontSize: "11px", color: "#94a3b8", margin: "5px 0 0 0" }}>
+                  Staff override securely bypasses location hours, shift lunch breaks, and seat limits under PostgreSQL concurrency locking with an audit record.
+                </p>
+              </div>
 
               {/* Submit Buttons */}
               <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>

@@ -989,9 +989,13 @@ export default function ServicesPage() {
                           <span style={{ color: "#38bdf8", fontSize: "12px", fontWeight: 700 }}>
                             {service.category || "General"}
                           </span>
-                          {service.capacity && service.capacity > 1 && (
+                          {service.capacity && service.capacity > 1 ? (
                             <span style={{ color: "#a855f7", fontSize: "11px", fontWeight: 600 }}>
                               • Group (Up to {service.capacity})
+                            </span>
+                          ) : (
+                            <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: 500 }}>
+                              • 1-on-1 Session
                             </span>
                           )}
                         </div>
@@ -1718,6 +1722,9 @@ export default function ServicesPage() {
                             fontSize: "13.5px",
                           }}
                         />
+                        <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#94a3b8" }}>
+                          Maximum concurrent clients per time slot. Slots vanish dynamically when capacity is filled.
+                        </p>
                       </div>
 
                       <div>

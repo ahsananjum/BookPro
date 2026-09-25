@@ -1316,6 +1316,7 @@ function ServiceCatalogCard({
       {services.map((svc) => {
         const price = svc.priceCents ? formatPrice(svc.priceCents, svc.currency, orgCurrency) : null;
         const depositRequired = svc.depositType && svc.depositType !== "NONE";
+        const capacity = svc.capacity || 1;
 
         return (
           <div
@@ -1342,9 +1343,20 @@ function ServiceCatalogCard({
                   </span>
                 )}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#94a3b8" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "#94a3b8", flexWrap: "wrap" }}>
                 <Clock size={12} />
                 <span>{svc.durationMin} min</span>
+                <span>•</span>
+                <span style={{
+                  backgroundColor: capacity > 1 ? "rgba(56, 189, 248, 0.15)" : "rgba(148, 163, 184, 0.12)",
+                  color: capacity > 1 ? "#38bdf8" : "#cbd5e1",
+                  padding: "1px 5px",
+                  borderRadius: "4px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                }}>
+                  {capacity > 1 ? `Group (Max ${capacity})` : "1-on-1"}
+                </span>
                 {svc.category && (
                   <>
                     <span>•</span>
@@ -1453,8 +1465,23 @@ function AvailabilitySlotsCard({
               }}
             >
               <div>
-                <div style={{ fontSize: "12.5px", fontWeight: 750, color: "#f8fafc" }}>
-                  {timeDisplay}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "6px" }}>
+                  <div style={{ fontSize: "12.5px", fontWeight: 750, color: "#f8fafc" }}>
+                    {timeDisplay}
+                  </div>
+                  {typeof slot.remainingCapacity === "number" && (
+                    <span style={{
+                      backgroundColor: slot.remainingCapacity <= 2 ? "rgba(245, 158, 11, 0.2)" : "rgba(16, 185, 129, 0.2)",
+                      color: slot.remainingCapacity <= 2 ? "#fbbf24" : "#34d399",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      fontSize: "10.5px",
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}>
+                      {slot.remainingCapacity} {slot.remainingCapacity === 1 ? "spot left" : "spots left"}
+                    </span>
+                  )}
                 </div>
                 {slot.staffName && (
                   <div style={{ fontSize: "11.5px", color: "#94a3b8", display: "flex", alignItems: "center", gap: "4px", marginTop: "3px" }}>

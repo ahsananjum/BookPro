@@ -18,6 +18,7 @@ import {
   Shield,
   Info,
   Loader2,
+  Users,
 } from "../../../components/icons";
 import styles from "./booking.module.css";
 import { StripePaymentSection } from "./payment-element";
@@ -44,6 +45,7 @@ interface ServiceItem {
   taxBehavior?: "EXCLUSIVE" | "INCLUSIVE" | "NONE";
   depositType?: string | null;
   depositValue?: number | null;
+  capacity?: number | null;
   isActive?: boolean;
 }
 
@@ -93,6 +95,14 @@ interface IntakeFormItem {
 function parseApiError(json: any, fallback: string): string {
   if (!json) return fallback;
   if (typeof json === "string") return json;
+  if (json.message) {
+    if (typeof json.message === "string") return json.message;
+    if (typeof json.message === "object" && json.message.message) return String(json.message.message);
+  }
+  if (json.error) {
+    if (typeof json.error === "string") return json.error;
+    if (typeof json.error === "object" && json.error.message) return String(json.error.message);
+  }
   if (Array.isArray(json.details) && json.details.length > 0) {
     const detailMsgs = json.details
       .map((d: any) => d.message || d.detail || (typeof d === "string" ? d : JSON.stringify(d)))
@@ -100,7 +110,6 @@ function parseApiError(json: any, fallback: string): string {
     if (detailMsgs.length > 0) return detailMsgs.join("; ");
   }
   if (json.detail && typeof json.detail === "string") return json.detail;
-  if (json.message && typeof json.message === "string") return json.message;
   if (json.title && typeof json.title === "string") return json.title;
   return fallback;
 }
@@ -195,6 +204,7 @@ export default function PublicBookingPage() {
   const [slotFetchError, setSlotFetchError] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [slotRefreshNonce, setSlotRefreshNonce] = useState(0);
+  const [partySize, setPartySize] = useState<number>(1);
 
   // Active Hold State
   const [holdId, setHoldId] = useState<string | null>(null);
@@ -205,6 +215,10 @@ export default function PublicBookingPage() {
   useEffect(() => {
     if (!holdId) setSelectedDate(todayStr);
   }, [todayStr, holdId]);
+
+  useEffect(() => {
+    setPartySize(1);
+  }, [selectedServiceId]);
 
   // Guest Details & Intake State
   const [fullName, setFullName] = useState("");
@@ -713,6 +727,7 @@ export default function PublicBookingPage() {
       locationId: selectedLocationId,
       startDate: selectedDate,
       endDate: selectedDate,
+      partySize: String(partySize),
     });
     if (selectedStaffId) {
       queryParams.set("staffId", selectedStaffId);
@@ -754,7 +769,7 @@ export default function PublicBookingPage() {
     return () => {
       controller.abort();
     };
-  }, [slug, selectedServiceId, selectedLocationId, selectedStaffId, selectedDate, todayStr, maxDateStr, slotRefreshNonce]);
+  }, [slug, selectedServiceId, selectedLocationId, selectedStaffId, selectedDate, todayStr, maxDateStr, slotRefreshNonce, partySize]);
 
   // Live Ticking Hold Timer protected against clock tampering
   useEffect(() => {
@@ -882,6 +897,7 @@ export default function PublicBookingPage() {
           locationId: selectedLocationId,
           staffId: selectedStaffId || slotStaffId || undefined,
           startAt: slotStartAt,
+          partySize,
           idempotencyKey,
         }),
       });
@@ -1426,6 +1442,15 @@ export default function PublicBookingPage() {
                     )}
 
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px", fontSize: "0.75rem" }}>
+                      {service.capacity && service.capacity > 1 ? (
+                        <span style={{ background: "rgba(168, 85, 247, 0.15)", border: "1px solid rgba(168, 85, 247, 0.3)", color: "#c084fc", padding: "2px 6px", borderRadius: "4px", fontWeight: 600 }}>
+                          Group Capacity: {service.capacity}
+                        </span>
+                      ) : (
+                        <span style={{ background: "rgba(56, 189, 248, 0.08)", border: "1px solid rgba(56, 189, 248, 0.2)", color: "#38bdf8", padding: "2px 6px", borderRadius: "4px", fontWeight: 600 }}>
+                          1-on-1 Session
+                        </span>
+                      )}
                       {service.depositType === "PERCENTAGE" && service.depositValue && (
                         <span style={{ background: "rgba(245, 158, 11, 0.15)", border: "1px solid rgba(245, 158, 11, 0.3)", color: "#f59e0b", padding: "2px 6px", borderRadius: "4px", fontWeight: 600 }}>
                           {service.depositValue}% Deposit Required
@@ -1589,6 +1614,48 @@ export default function PublicBookingPage() {
                   onChange={(e) => setSelectedDate(e.target.value)}
                 />
               </div>
+
+              {/* Party Size Selector for Group Services */}
+              {(() => {
+                const curSvc = services.find((s) => s.id === selectedServiceId);
+                if (!curSvc || (curSvc.capacity || 1) <= 1) return null;
+                const maxCap = Math.min(curSvc.capacity || 1, 12);
+                return (
+                  <div style={{ marginBottom: "1.5rem", padding: "14px", borderRadius: "10px", background: "rgba(168, 85, 247, 0.08)", border: "1px solid rgba(168, 85, 247, 0.25)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                      <label style={{ fontSize: "13px", fontWeight: 700, color: "#e9d5ff", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <Users size={16} color="#c084fc" />
+                        Party Size / Attendees (Max {curSvc.capacity})
+                      </label>
+                      <span style={{ fontSize: "12px", color: "#c084fc", fontWeight: 600 }}>
+                        Group Session
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      {Array.from({ length: maxCap }, (_, i) => i + 1).map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setPartySize(num)}
+                          style={{
+                            minWidth: "40px",
+                            padding: "8px 12px",
+                            borderRadius: "8px",
+                            border: partySize === num ? "1px solid #c084fc" : "1px solid rgba(255, 255, 255, 0.1)",
+                            background: partySize === num ? "rgba(168, 85, 247, 0.3)" : "rgba(15, 23, 42, 0.6)",
+                            color: partySize === num ? "#fff" : "#cbd5e1",
+                            fontWeight: 700,
+                            fontSize: "13px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {num}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Slots Grid */}
               <div className={styles.slotsHeader}>
@@ -1885,7 +1952,12 @@ export default function PublicBookingPage() {
                           className={`${styles.slotButton} ${isSelected ? styles.slotButtonSelected : ""}`}
                           onClick={() => handleReserveSlot(slot.startAt, (slot as any).staffId)}
                         >
-                          {timeLabel}
+                          <span>{timeLabel}</span>
+                          {(slot as any).remainingCapacity !== undefined && (slot as any).remainingCapacity > 1 && (
+                            <span style={{ fontSize: "10px", opacity: 0.85, display: "block", marginTop: "2px", color: "#c084fc", fontWeight: 700 }}>
+                              {(slot as any).remainingCapacity} spots left
+                            </span>
+                          )}
                         </button>
                       );
                     })}

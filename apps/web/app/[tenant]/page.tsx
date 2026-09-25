@@ -801,6 +801,41 @@ export default function TenantPublicPage() {
                           )}
                         </div>
 
+                        {service.capacity && service.capacity > 1 ? (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              backgroundColor: "rgba(168, 85, 247, 0.12)",
+                              border: "1px solid rgba(168, 85, 247, 0.3)",
+                              color: "#c084fc",
+                              fontWeight: 700,
+                            }}
+                          >
+                            <Users size={14} color="#c084fc" />
+                            <span>Group (Up to {service.capacity})</span>
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              backgroundColor: "rgba(255, 255, 255, 0.05)",
+                              border: "1px solid rgba(255, 255, 255, 0.08)",
+                              color: "#94a3b8",
+                            }}
+                          >
+                            <UserCheck size={14} color="#94a3b8" />
+                            <span>1-on-1 Session</span>
+                          </div>
+                        )}
+
                         {service.depositType === "PERCENTAGE" && service.depositValue && (
                           <GlassBadge variant="warning" size="sm">
                             {service.depositValue}% Deposit

@@ -246,7 +246,8 @@ function CustomerAccountContent() {
   const [cancelModalAppt, setCancelModalAppt] = useState<CustomerAppointment | null>(null);
   const [rescheduleModalAppt, setRescheduleModalAppt] = useState<CustomerAppointment | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState<string>("");
-  const [rescheduleSlots, setRescheduleSlots] = useState<Array<{ slotUtc: string; available: boolean; staffId?: string; staffDisplayName?: string }>>([]);
+  const [rescheduleSlots, setRescheduleSlots] = useState<Array<{ slotUtc: string; available: boolean; staffId?: string; staffDisplayName?: string; remainingCapacity?: number }>>([]);
+  const [rescheduleNonce, setRescheduleNonce] = useState(0);
   const [selectedRescheduleSlot, setSelectedRescheduleSlot] = useState<string>("");
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -378,11 +379,14 @@ function CustomerAccountContent() {
         hint.type.startsWith("payment.") ||
         hint.type.startsWith("refund.") ||
         hint.type.startsWith("commission.") ||
-        hint.type.startsWith("customer.")
+        hint.type.startsWith("customer.") ||
+        hint.type.startsWith("schedule.") ||
+        hint.type.startsWith("location.")
       ) {
         fetchAppointments();
         fetchBilling();
         fetchWaitlistData();
+        setRescheduleNonce((n) => n + 1);
       }
     },
   });
@@ -398,11 +402,14 @@ function CustomerAccountContent() {
     });
     if (rescheduleModalAppt.locationId) params.append("locationId", rescheduleModalAppt.locationId);
     if (rescheduleModalAppt.serviceId) params.append("serviceId", rescheduleModalAppt.serviceId);
+    if ((rescheduleModalAppt as any).partySize && (rescheduleModalAppt as any).partySize > 1) {
+      params.append("partySize", String((rescheduleModalAppt as any).partySize));
+    }
     if (!autoAssignStaff && rescheduleModalAppt.staffId) params.append("staffId", rescheduleModalAppt.staffId);
 
     apiFetch<any>(`/availability/slots?${params.toString()}`, {}, organization.id)
       .then((res) => {
-        const slots: Array<{ slotUtc: string; available: boolean; staffId?: string; staffDisplayName?: string }> = [];
+        const slots: Array<{ slotUtc: string; available: boolean; staffId?: string; staffDisplayName?: string; remainingCapacity?: number }> = [];
         if (res.success && res.data) {
           const raw = Array.isArray(res.data) ? res.data : res.data.slots || [];
           raw.forEach((s: any) => {
@@ -411,6 +418,7 @@ function CustomerAccountContent() {
               available: s.available !== false,
               staffId: s.staffId,
               staffDisplayName: s.staffDisplayName,
+              remainingCapacity: typeof s.remainingCapacity === "number" ? s.remainingCapacity : undefined,
             });
           });
         }
@@ -418,7 +426,7 @@ function CustomerAccountContent() {
       })
       .catch(() => setRescheduleSlots([]))
       .finally(() => setLoadingSlots(false));
-  }, [rescheduleModalAppt, rescheduleDate, autoAssignStaff, organization?.id]);
+  }, [rescheduleModalAppt, rescheduleDate, autoAssignStaff, organization?.id, rescheduleNonce]);
 
   const handleCustomerReschedule = async () => {
     if (!rescheduleModalAppt || !selectedRescheduleSlot || !organization?.id) return;
@@ -2788,9 +2796,26 @@ function CustomerAccountContent() {
                                       fontSize: "12px",
                                       fontWeight: isChosen ? 800 : 600,
                                       cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "4px",
                                     }}
                                   >
                                     <span>{timeStr}</span>
+                                    {typeof slot.remainingCapacity === "number" && (
+                                      <span
+                                        style={{
+                                          fontSize: "10px",
+                                          padding: "1px 4px",
+                                          borderRadius: "4px",
+                                          backgroundColor: isChosen ? "rgba(255, 255, 255, 0.25)" : "rgba(56, 189, 248, 0.15)",
+                                          color: isChosen ? "#fff" : "#38bdf8",
+                                          fontWeight: 700,
+                                        }}
+                                      >
+                                        {slot.remainingCapacity} left
+                                      </span>
+                                    )}
                                     {slot.staffDisplayName && (
                                       <span style={{ fontSize: "10px", opacity: 0.8, marginLeft: "4px" }}>
                                         ({slot.staffDisplayName})
