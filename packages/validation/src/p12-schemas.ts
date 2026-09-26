@@ -43,8 +43,12 @@ export const reviewListQuerySchema = z.object({
 }).strict();
 
 export const verifyQrCheckInSchema = z.object({
-    token: z.string().min(10).max(512),
-}).strict();
+    token: z.string().min(1).max(2048).optional(),
+    qrToken: z.string().min(1).max(2048).optional(),
+    pass: z.string().min(1).max(2048).optional(),
+}).refine((data) => !!(data.token || data.qrToken || data.pass), {
+    message: "A valid QR check-in token is required.",
+});
 
 export const staffCheckInSchema = z.object({
     locationId: z.string().uuid().optional(),

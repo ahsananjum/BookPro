@@ -35,9 +35,11 @@ export class QrCheckInController {
     async checkInWithQr(@Body() body: unknown) {
         const parsed = verifyQrCheckInSchema.safeParse(body || {});
         if (!parsed.success) {
-            throw new BadRequestException(parsed.error.format());
+            const errorMsg = parsed.error.issues.map((i) => i.message).join(", ") || "A valid QR check-in token is required.";
+            throw new BadRequestException(errorMsg);
         }
 
-        return this.qrCheckInService.verifyAndCheckIn(parsed.data.token);
+        const rawToken = parsed.data.token || parsed.data.qrToken || parsed.data.pass || "";
+        return this.qrCheckInService.verifyAndCheckIn(rawToken);
     }
 }

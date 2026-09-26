@@ -190,14 +190,29 @@ export function CameraQrScanner({
                 }
 
                 if (detected && detected.length > 0) {
-                    scannedCodeRef.current = detected;
-                    setScannedCode(detected);
+                    let cleanDetected = detected.trim();
+                    cleanDetected = cleanDetected.replace(/^["']|["']$/g, "").trim();
+                    if (cleanDetected.startsWith("{") && cleanDetected.endsWith("}")) {
+                        try {
+                            const obj = JSON.parse(cleanDetected);
+                            cleanDetected = obj.token || obj.qrToken || obj.pass || obj.appointmentId || cleanDetected;
+                        } catch {}
+                    } else if (cleanDetected.includes("http://") || cleanDetected.includes("https://")) {
+                        try {
+                            const url = new URL(cleanDetected);
+                            const t = url.searchParams.get("token") || url.searchParams.get("pass") || url.searchParams.get("t");
+                            if (t) cleanDetected = decodeURIComponent(t.trim());
+                        } catch {}
+                    }
+
+                    scannedCodeRef.current = cleanDetected;
+                    setScannedCode(cleanDetected);
                     playSuccessChime();
                     if (typeof navigator !== "undefined" && navigator.vibrate) {
                         try { navigator.vibrate(80); } catch {}
                     }
                     stopStream();
-                    onScanRef.current(detected);
+                    onScanRef.current(cleanDetected);
                     return;
                 }
             } finally {
@@ -343,8 +358,23 @@ export function CameraQrScanner({
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const trimmed = manualToken.trim();
+        let trimmed = manualToken.trim();
         if (!trimmed) return;
+
+        trimmed = trimmed.replace(/^["']|["']$/g, "").trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+                const obj = JSON.parse(trimmed);
+                trimmed = obj.token || obj.qrToken || obj.pass || obj.appointmentId || trimmed;
+            } catch {}
+        } else if (trimmed.includes("http://") || trimmed.includes("https://")) {
+            try {
+                const url = new URL(trimmed);
+                const t = url.searchParams.get("token") || url.searchParams.get("pass") || url.searchParams.get("t");
+                if (t) trimmed = decodeURIComponent(t.trim());
+            } catch {}
+        }
+
         playSuccessChime();
         scannedCodeRef.current = trimmed;
         setScannedCode(trimmed);

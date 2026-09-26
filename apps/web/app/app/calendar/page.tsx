@@ -3,7 +3,7 @@
  */
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -28,6 +28,10 @@ import {
   Briefcase,
   ShieldAlert,
   QrCode,
+  ChevronDown,
+  ChevronUp,
+  Sun,
+  Moon,
 } from "../../../components/icons";
 import { CameraQrScanner } from "../../../components/camera-qr-scanner";
 import { useAuth } from "../../../lib/auth-context";
@@ -262,6 +266,22 @@ export default function BusinessCalendarPage() {
   const [scannerTokenInput, setScannerTokenInput] = useState("");
   const [isVerifyingQr, setIsVerifyingQr] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ type: "success" | "error"; message: string; data?: any } | null>(null);
+
+  // Sleek Viewport & Operational Timeline Controls
+  const [showEarlyHours, setShowEarlyHours] = useState(false);
+  const [showLateHours, setShowLateHours] = useState(false);
+  const [densityMode, setDensityMode] = useState<"compact" | "comfortable">("compact");
+  const [timeRangePreset, setTimeRangePreset] = useState<"core" | "full">("core");
+  const [weekExpandedDays, setWeekExpandedDays] = useState<Record<string, boolean>>({});
+  const [staffExpandedRoster, setStaffExpandedRoster] = useState<Record<string, boolean>>({});
+  const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Live minute ticker for current timeline line
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Auto-Settle Batch State
   const [isAutoSettling, setIsAutoSettling] = useState(false);
@@ -691,8 +711,25 @@ export default function BusinessCalendarPage() {
   // Front-Desk QR Pass Scanner Submit
   const handleQrScanSubmit = async (e?: React.FormEvent, directToken?: string) => {
     if (e) e.preventDefault();
-    const token = (directToken || scannerTokenInput).trim();
+    let token = (directToken || scannerTokenInput).trim();
     if (!token) return;
+
+    // Clean surrounding quotes
+    token = token.replace(/^["']|["']$/g, "").trim();
+
+    // Extract token if raw JSON or URL was pasted / scanned
+    if (token.startsWith("{") && token.endsWith("}")) {
+      try {
+        const obj = JSON.parse(token);
+        token = obj.token || obj.qrToken || obj.pass || obj.appointmentId || token;
+      } catch {}
+    } else if (token.includes("http://") || token.includes("https://")) {
+      try {
+        const url = new URL(token);
+        const urlToken = url.searchParams.get("token") || url.searchParams.get("pass") || url.searchParams.get("t");
+        if (urlToken) token = decodeURIComponent(urlToken.trim());
+      } catch {}
+    }
 
     setIsVerifyingQr(true);
     setScanFeedback(null);
@@ -704,20 +741,27 @@ export default function BusinessCalendarPage() {
 
       if (res.success && res.data) {
         const appt = res.data.appointment || res.data;
+        const custName = res.data.customerName || appt.customer?.fullName || "Client";
+        const servName = res.data.serviceName || appt.service?.name || "Service";
+        const msg = res.data.message || `✓ Check-in verified! ${custName} (${servName})`;
         setScanFeedback({
           type: "success",
-          message: `✓ Check-in verified! ${appt.customer?.fullName || "Client"} (${appt.service?.name || "Service"})`,
+          message: msg,
           data: appt,
         });
         setScannerTokenInput("");
         fetchAppointments();
-        if (selectedAppt && selectedAppt.id === appt.id) {
+        if (selectedAppt && (selectedAppt.id === appt.id || selectedAppt.id === res.data.appointmentId)) {
           setSelectedAppt({ ...selectedAppt, status: "CHECKED_IN", checkInAt: new Date().toISOString() });
         }
       } else {
+        const serverError = res.error?.message || (res as any)?.message;
+        const displayMsg = serverError && typeof serverError === "string" && !serverError.includes("HTTP_ERROR")
+          ? serverError
+          : sanitizeErrorMessage(res.error, "Invalid or expired QR pass token. Please ensure pass is within the check-in window.").message;
         setScanFeedback({
           type: "error",
-          message: `⚠️ Verification rejected: ${sanitizeErrorMessage(res.error, "Invalid or expired QR pass token").message}`,
+          message: `⚠️ Verification rejected: ${displayMsg}`,
         });
       }
     } catch (err: any) {
@@ -882,183 +926,501 @@ export default function BusinessCalendarPage() {
 
   // Render sub-views
   const renderDayView = () => {
-    // Hour slots from 07:00 to 21:00
-    const hours = Array.from({ length: 15 }, (_, i) => i + 7);
+    const todayStr = new Date().toISOString().split("T")[0];
+    const isToday = selectedDate === todayStr;
+    const currentH = currentTime.getHours();
+    const currentM = currentTime.getMinutes();
 
-    return (
-      <div style={{ backgroundColor: "#0f172a", borderRadius: "12px", border: "1px solid #1e293b", overflow: "hidden" }}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#94a3b8", fontSize: "13px", fontWeight: 700 }}>
-            <Clock size={16} color="#38bdf8" />
-            <span>Operational Day Timeline ({filteredAppointments.length} Bookings)</span>
+    // Partition appointments for off-hours detection
+    const earlyAppts = filteredAppointments.filter((a) => new Date(a.startAt).getHours() < 7);
+    const earlyHolds = waitlistHolds.filter((h) => {
+      const d = new Date(h.startAt);
+      return d.toISOString().split("T")[0] === selectedDate && d.getHours() < 7;
+    });
+    const hasEarlyBookings = earlyAppts.length > 0 || earlyHolds.length > 0;
+
+    const lateAppts = filteredAppointments.filter((a) => new Date(a.startAt).getHours() >= 21);
+    const lateHolds = waitlistHolds.filter((h) => {
+      const d = new Date(h.startAt);
+      return d.toISOString().split("T")[0] === selectedDate && d.getHours() >= 21;
+    });
+    const hasLateBookings = lateAppts.length > 0 || lateHolds.length > 0;
+
+    // Determine displayed hour lists
+    const earlyHours = [0, 1, 2, 3, 4, 5, 6];
+    const coreHours = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+    const lateHours = [21, 22, 23];
+
+    const isEarlyExpanded = timeRangePreset === "full" || showEarlyHours || hasEarlyBookings;
+    const isLateExpanded = timeRangePreset === "full" || showLateHours || hasLateBookings;
+
+    const slotHeight = densityMode === "compact" ? 44 : 66;
+    const totalDayRevenue = filteredAppointments.reduce((acc, a) => acc + (a.priceCents || 0), 0);
+    const completedCount = filteredAppointments.filter((a) => a.status === "COMPLETED").length;
+
+    const renderHourSlot = (hour: number) => {
+      const timeLabel = `${hour.toString().padStart(2, "0")}:00`;
+      const isCurrentHour = isToday && currentH === hour;
+      const apptsInHour = filteredAppointments.filter((a) => {
+        const d = new Date(a.startAt);
+        return d.getHours() === hour;
+      });
+      const holdsInHour = waitlistHolds.filter((h) => {
+        const d = new Date(h.startAt);
+        return d.toISOString().split("T")[0] === selectedDate && d.getHours() === hour;
+      });
+
+      return (
+        <div
+          id={`slot-hour-${hour}`}
+          key={hour}
+          style={{
+            position: "relative",
+            display: "grid",
+            gridTemplateColumns: "72px 1fr",
+            minHeight: `${slotHeight}px`,
+            borderBottom: "1px solid #1e293b",
+            alignItems: "stretch",
+            backgroundColor: isCurrentHour ? "rgba(56, 189, 248, 0.025)" : "transparent",
+            transition: "background-color 0.15s ease",
+          }}
+        >
+          {/* Time Label */}
+          <div
+            style={{
+              padding: densityMode === "compact" ? "6px 12px" : "10px 14px",
+              color: isCurrentHour ? "#38bdf8" : "#64748b",
+              fontSize: densityMode === "compact" ? "11.5px" : "12.5px",
+              fontWeight: 800,
+              borderRight: "1px solid #1e293b",
+              textAlign: "right",
+              backgroundColor: isCurrentHour ? "rgba(56, 189, 248, 0.05)" : "transparent",
+              userSelect: "none",
+            }}
+          >
+            {timeLabel}
           </div>
-          <span style={{ fontSize: "12px", color: "#64748b" }}>Click an empty slot to book walk-in</span>
-        </div>
 
-        <div style={{ position: "relative", minHeight: "800px", padding: "10px 0" }}>
-          {hours.map((hour) => {
-            const timeLabel = `${hour.toString().padStart(2, "0")}:00`;
-            const apptsInHour = filteredAppointments.filter((a) => {
-              const d = new Date(a.startAt);
-              return d.getHours() === hour;
-            });
-            const holdsInHour = waitlistHolds.filter((h) => {
-              const d = new Date(h.startAt);
-              return d.toISOString().split("T")[0] === selectedDate && d.getHours() === hour;
-            });
-
-            return (
+          {/* Slots & Bookings Area */}
+          <div
+            style={{
+              position: "relative",
+              padding: densityMode === "compact" ? "4px 8px" : "8px 12px",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: densityMode === "compact" ? "6px" : "10px",
+              alignItems: "center",
+              cursor: "pointer",
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setNewApptDate(selectedDate);
+                setSelectedSlot(`${selectedDate}T${hour.toString().padStart(2, "0")}:00:00.000Z`);
+                setIsNewModalOpen(true);
+              }
+            }}
+          >
+            {/* Live Minute Horizontal Bar (on Today) */}
+            {isCurrentHour && (
               <div
-                key={hour}
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "80px 1fr",
-                  minHeight: "64px",
-                  borderBottom: "1px solid #1e293b",
-                  alignItems: "stretch",
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  top: `${Math.min(96, Math.max(4, (currentM / 60) * 100))}%`,
+                  zIndex: 10,
+                  pointerEvents: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  borderTop: "2px solid #ef4444",
+                  boxShadow: "0 0 10px rgba(239, 68, 68, 0.6)",
                 }}
               >
-                <div
+                <span
                   style={{
-                    padding: "8px 16px",
-                    color: "#64748b",
-                    fontSize: "12px",
-                    fontWeight: 800,
-                    borderRight: "1px solid #1e293b",
-                    textAlign: "right",
+                    backgroundColor: "#ef4444",
+                    color: "#ffffff",
+                    fontSize: "9.5px",
+                    fontWeight: 900,
+                    padding: "1px 6px",
+                    borderRadius: "9999px",
+                    transform: "translateY(-50%)",
+                    marginRight: "10px",
+                    letterSpacing: "0.04em",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.5)",
                   }}
                 >
-                  {timeLabel}
-                </div>
+                  ● NOW {currentTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            )}
 
+            {/* Waitlist Hold Blocks */}
+            {holdsInHour.map((hold) => {
+              const minutesLeft = Math.max(0, Math.round((new Date(hold.expiresAt).getTime() - Date.now()) / 60000));
+              return (
                 <div
-                  style={{
-                    padding: "6px 12px",
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "10px",
-                    alignItems: "center",
-                    backgroundColor: "transparent",
-                    cursor: "pointer",
-                  }}
+                  key={hold.holdId}
                   onClick={(e) => {
-                    if (e.target === e.currentTarget) {
-                      setNewApptDate(selectedDate);
-                      setIsNewModalOpen(true);
-                    }
+                    e.stopPropagation();
+                    setSelectedHoldToOverride(hold);
                   }}
+                  style={{
+                    backgroundColor: "rgba(245, 158, 11, 0.12)",
+                    backgroundImage: "repeating-linear-gradient(45deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.08) 10px, transparent 10px, transparent 20px)",
+                    border: "1px dashed rgba(245, 158, 11, 0.6)",
+                    borderLeft: "4px solid #f59e0b",
+                    borderRadius: "7px",
+                    padding: densityMode === "compact" ? "4px 10px" : "8px 14px",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    minWidth: densityMode === "compact" ? "210px" : "260px",
+                    boxShadow: "0 2px 8px rgba(245, 158, 11, 0.15)",
+                    zIndex: 2,
+                  }}
+                  onMouseEnter={(el) => (el.currentTarget.style.transform = "translateY(-1px)")}
+                  onMouseLeave={(el) => (el.currentTarget.style.transform = "translateY(0)")}
                 >
-                  {/* Waitlist Hold Blocks */}
-                  {holdsInHour.map((hold) => {
-                    const minutesLeft = Math.max(0, Math.round((new Date(hold.expiresAt).getTime() - Date.now()) / 60000));
-                    return (
-                      <div
-                        key={hold.holdId}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedHoldToOverride(hold);
-                        }}
-                        style={{
-                          backgroundColor: "rgba(245, 158, 11, 0.12)",
-                          backgroundImage: "repeating-linear-gradient(45deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.08) 10px, transparent 10px, transparent 20px)",
-                          border: "1px dashed rgba(245, 158, 11, 0.6)",
-                          borderLeft: "4px solid #f59e0b",
-                          borderRadius: "8px",
-                          padding: "8px 14px",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                          minWidth: "260px",
-                          boxShadow: "0 2px 8px rgba(245, 158, 11, 0.15)",
-                        }}
-                        onMouseEnter={(el) => (el.currentTarget.style.transform = "translateY(-1px)")}
-                        onMouseLeave={(el) => (el.currentTarget.style.transform = "translateY(0)")}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontSize: "12px", fontWeight: 800, color: "#fbbf24" }}>
-                            {new Date(hold.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} -{" "}
-                            {new Date(hold.endAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: "10px",
-                              fontWeight: 850,
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                              backgroundColor: "#f59e0b",
-                              color: "#0f172a",
-                            }}
-                          >
-                            ⏳ HOLD ({minutesLeft}m)
-                          </span>
-                        </div>
-                        <div style={{ fontSize: "14px", fontWeight: 700, color: "#f8fafc", marginTop: "4px" }}>
-                          Hold: {hold.customerName || "Waitlist Guest"}
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px", fontSize: "12px", color: "#94a3b8" }}>
-                          <span>{hold.serviceName}</span>
-                          <span style={{ color: "#fbbf24", fontWeight: 700 }}>Override →</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: densityMode === "compact" ? "11px" : "12px", fontWeight: 800, color: "#fbbf24" }}>
+                      {new Date(hold.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} -{" "}
+                      {new Date(hold.endAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "9.5px",
+                        fontWeight: 850,
+                        padding: "1px 5px",
+                        borderRadius: "4px",
+                        backgroundColor: "#f59e0b",
+                        color: "#0f172a",
+                      }}
+                    >
+                      ⏳ HOLD ({minutesLeft}m)
+                    </span>
+                  </div>
+                  <div style={{ fontSize: densityMode === "compact" ? "12px" : "13.5px", fontWeight: 700, color: "#f8fafc", marginTop: "2px" }}>
+                    Hold: {hold.customerName || "Waitlist Guest"}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px", fontSize: "11px", color: "#94a3b8" }}>
+                    <span>{hold.serviceName}</span>
+                    <span style={{ color: "#fbbf24", fontWeight: 700 }}>Override →</span>
+                  </div>
+                </div>
+              );
+            })}
 
-                  {apptsInHour.map((appt) => {
-                    const badge = statusBadges[appt.status] || { bg: "#334155", text: "#fff", border: "#475569" };
-                    return (
-                      <div
-                        key={appt.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenApptDetail(appt);
-                        }}
-                        style={{
-                          backgroundColor: "#1e293b",
-                          border: `1px solid ${badge.border}`,
-                          borderLeft: `4px solid ${badge.text}`,
-                          borderRadius: "8px",
-                          padding: "8px 14px",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                          minWidth: "260px",
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-                        }}
-                        onMouseEnter={(el) => (el.currentTarget.style.transform = "translateY(-1px)")}
-                        onMouseLeave={(el) => (el.currentTarget.style.transform = "translateY(0)")}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontSize: "12px", fontWeight: 800, color: "#38bdf8" }}>
-                            {new Date(appt.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} -{" "}
-                            {new Date(appt.endAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: "10.5px",
-                              fontWeight: 800,
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                              backgroundColor: badge.bg,
-                              color: badge.text,
-                            }}
-                          >
-                            {appt.status}
-                          </span>
-                        </div>
+            {/* Appointment Blocks */}
+            {apptsInHour.map((appt) => {
+              const badge = statusBadges[appt.status] || { bg: "#334155", text: "#fff", border: "#475569" };
+              return (
+                <div
+                  key={appt.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenApptDetail(appt);
+                  }}
+                  style={{
+                    backgroundColor: "#1e293b",
+                    border: `1px solid ${badge.border}`,
+                    borderLeft: `4px solid ${badge.text}`,
+                    borderRadius: "7px",
+                    padding: densityMode === "compact" ? "5px 10px" : "8px 14px",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    minWidth: densityMode === "compact" ? "220px" : "260px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
+                    zIndex: 2,
+                  }}
+                  onMouseEnter={(el) => (el.currentTarget.style.transform = "translateY(-1px)")}
+                  onMouseLeave={(el) => (el.currentTarget.style.transform = "translateY(0)")}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: densityMode === "compact" ? "11px" : "12px", fontWeight: 800, color: "#38bdf8" }}>
+                      {new Date(appt.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} -{" "}
+                      {new Date(appt.endAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        fontWeight: 800,
+                        padding: "1px 6px",
+                        borderRadius: "4px",
+                        backgroundColor: badge.bg,
+                        color: badge.text,
+                      }}
+                    >
+                      {appt.status}
+                    </span>
+                  </div>
 
-                        <div style={{ fontSize: "14px", fontWeight: 700, color: "#f8fafc", marginTop: "4px" }}>
-                          {appt.service?.name || "Service"}
-                        </div>
+                  <div style={{ fontSize: densityMode === "compact" ? "12.5px" : "13.5px", fontWeight: 700, color: "#f8fafc", marginTop: "2px" }}>
+                    {appt.service?.name || "Service"}
+                  </div>
 
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px", fontSize: "12px", color: "#94a3b8" }}>
-                          <span>Client: <strong style={{ color: "#e2e8f0" }}>{appt.customer?.fullName || "Guest"}</strong></span>
-                          <span>Staff: <strong style={{ color: "#cbd5e1" }}>{appt.staff?.displayName || "Unassigned"}</strong></span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px", fontSize: "11px", color: "#94a3b8" }}>
+                    <span>Client: <strong style={{ color: "#e2e8f0" }}>{appt.customer?.fullName || "Guest"}</strong></span>
+                    <span>Staff: <strong style={{ color: "#cbd5e1" }}>{appt.staff?.displayName || "Unassigned"}</strong></span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Empty Slot Subtle Hint on hover/idle */}
+            {holdsInHour.length === 0 && apptsInHour.length === 0 && (
+              <span style={{ fontSize: "11px", color: "#334155", fontStyle: "italic", userSelect: "none" }}>
+                + Click to book {timeLabel}
+              </span>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div style={{ backgroundColor: "#0f172a", borderRadius: "12px", border: "1px solid #1e293b", overflow: "hidden", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }}>
+        {/* Sleek Sticky Timeline Control Bar */}
+        <div
+          style={{
+            padding: "12px 18px",
+            borderBottom: "1px solid #1e293b",
+            backgroundColor: "#111b2e",
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+          }}
+        >
+          {/* Left: Day Stats */}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#f8fafc", fontSize: "13.5px", fontWeight: 800 }}>
+              <Clock size={16} color="#38bdf8" />
+              <span>
+                {new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(`${selectedDate}T12:00:00Z`))}
+              </span>
+            </div>
+
+            <span style={{ fontSize: "11.5px", padding: "2px 8px", borderRadius: "9999px", backgroundColor: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", fontWeight: 800 }}>
+              {filteredAppointments.length} Bookings
+            </span>
+
+            {waitlistHolds.length > 0 && (
+              <span style={{ fontSize: "11.5px", padding: "2px 8px", borderRadius: "9999px", backgroundColor: "rgba(245, 158, 11, 0.15)", color: "#fbbf24", fontWeight: 800 }}>
+                {waitlistHolds.length} Holds
+              </span>
+            )}
+
+            <span style={{ fontSize: "11.5px", padding: "2px 8px", borderRadius: "9999px", backgroundColor: "rgba(52, 211, 153, 0.15)", color: "#34d399", fontWeight: 800 }}>
+              {formatMoney(totalDayRevenue)} Est. Value
+            </span>
+          </div>
+
+          {/* Right: Timeline controls (Density, Jump to now, Range) */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            {isToday && (
+              <button
+                type="button"
+                onClick={() => {
+                  const targetHour = Math.max(0, currentH - 1);
+                  const el = document.getElementById(`slot-hour-${targetHour}`) || document.getElementById(`slot-hour-${currentH}`);
+                  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  backgroundColor: "rgba(239, 68, 68, 0.12)",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  color: "#f87171",
+                  fontSize: "11.5px",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                <span>● Jump to Now</span>
+              </button>
+            )}
+
+            {/* Density Selector */}
+            <div style={{ display: "inline-flex", backgroundColor: "#1e293b", padding: "2px", borderRadius: "6px", border: "1px solid #334155" }}>
+              <button
+                type="button"
+                onClick={() => setDensityMode("compact")}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  border: "none",
+                  backgroundColor: densityMode === "compact" ? "#0284c7" : "transparent",
+                  color: densityMode === "compact" ? "#fff" : "#94a3b8",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Compact
+              </button>
+              <button
+                type="button"
+                onClick={() => setDensityMode("comfortable")}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  border: "none",
+                  backgroundColor: densityMode === "comfortable" ? "#0284c7" : "transparent",
+                  color: densityMode === "comfortable" ? "#fff" : "#94a3b8",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Comfortable
+              </button>
+            </div>
+
+            {/* Hours Range Selector */}
+            <div style={{ display: "inline-flex", backgroundColor: "#1e293b", padding: "2px", borderRadius: "6px", border: "1px solid #334155" }}>
+              <button
+                type="button"
+                onClick={() => setTimeRangePreset("core")}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  border: "none",
+                  backgroundColor: timeRangePreset === "core" ? "#334155" : "transparent",
+                  color: timeRangePreset === "core" ? "#38bdf8" : "#94a3b8",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+                title="Business core hours: 07:00 to 21:00 with collapsible off-hours"
+              >
+                Core (07–21)
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimeRangePreset("full")}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  border: "none",
+                  backgroundColor: timeRangePreset === "full" ? "#334155" : "transparent",
+                  color: timeRangePreset === "full" ? "#38bdf8" : "#94a3b8",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+                title="Show continuous 24-hour schedule (00:00 to 24:00)"
+              >
+                24h Full
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable Viewport Timeline Container */}
+        <div
+          ref={timelineScrollRef}
+          style={{
+            position: "relative",
+            maxHeight: densityMode === "compact" ? "560px" : "660px",
+            overflowY: "auto",
+            scrollbarWidth: "thin",
+          }}
+        >
+          {/* EARLY HOURS ACCORDION (00:00 - 06:00) */}
+          {timeRangePreset === "core" && (
+            <div style={{ borderBottom: "1px solid #1e293b" }}>
+              <div
+                onClick={() => setShowEarlyHours((prev) => !prev)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "8px 16px",
+                  backgroundColor: hasEarlyBookings ? "rgba(56, 189, 248, 0.08)" : "#0b1120",
+                  cursor: "pointer",
+                  fontSize: "11.5px",
+                  color: hasEarlyBookings ? "#38bdf8" : "#94a3b8",
+                  fontWeight: 700,
+                  transition: "background-color 0.15s ease",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Moon size={13} color={hasEarlyBookings ? "#38bdf8" : "#64748b"} />
+                  <span>Early Morning Hours (00:00 – 07:00)</span>
+                  {hasEarlyBookings && (
+                    <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "9999px", backgroundColor: "#0284c7", color: "#fff", fontWeight: 800 }}>
+                      {earlyAppts.length + earlyHolds.length} scheduled
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#38bdf8", fontSize: "11px" }}>
+                  <span>{isEarlyExpanded ? "Hide early hours" : "See more early hours"}</span>
+                  {isEarlyExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </div>
               </div>
-            );
-          })}
+
+              {isEarlyExpanded && (
+                <div style={{ backgroundColor: "rgba(11, 17, 32, 0.4)" }}>
+                  {earlyHours.map((h) => renderHourSlot(h))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* If Full 24h mode, render early hours directly */}
+          {timeRangePreset === "full" && earlyHours.map((h) => renderHourSlot(h))}
+
+          {/* CORE HOURS (07:00 - 20:00) */}
+          {coreHours.map((h) => renderHourSlot(h))}
+
+          {/* LATE HOURS ACCORDION (21:00 - 23:00) */}
+          {timeRangePreset === "core" && (
+            <div style={{ borderTop: "1px solid #1e293b" }}>
+              <div
+                onClick={() => setShowLateHours((prev) => !prev)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "8px 16px",
+                  backgroundColor: hasLateBookings ? "rgba(56, 189, 248, 0.08)" : "#0b1120",
+                  cursor: "pointer",
+                  fontSize: "11.5px",
+                  color: hasLateBookings ? "#38bdf8" : "#94a3b8",
+                  fontWeight: 700,
+                  transition: "background-color 0.15s ease",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Moon size={13} color={hasLateBookings ? "#38bdf8" : "#64748b"} />
+                  <span>Late Night Hours (21:00 – 24:00)</span>
+                  {hasLateBookings && (
+                    <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "9999px", backgroundColor: "#0284c7", color: "#fff", fontWeight: 800 }}>
+                      {lateAppts.length + lateHolds.length} scheduled
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#38bdf8", fontSize: "11px" }}>
+                  <span>{isLateExpanded ? "Hide late hours" : "See more late hours"}</span>
+                  {isLateExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </div>
+              </div>
+
+              {isLateExpanded && (
+                <div style={{ backgroundColor: "rgba(11, 17, 32, 0.4)" }}>
+                  {lateHours.map((h) => renderHourSlot(h))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* If Full 24h mode, render late hours directly */}
+          {timeRangePreset === "full" && lateHours.map((h) => renderHourSlot(h))}
         </div>
       </div>
     );
@@ -1069,7 +1431,7 @@ export default function BusinessCalendarPage() {
     const mon = new Date(`${dateRange.startDate}T12:00:00Z`);
 
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(150px, 1fr))", gap: "12px", overflowX: "auto", paddingBottom: "12px" }}>
         {days.map((dayName, idx) => {
           const currentDay = new Date(mon);
           currentDay.setDate(mon.getDate() + idx);
@@ -1083,6 +1445,10 @@ export default function BusinessCalendarPage() {
             (h) => new Date(h.startAt).toISOString().split("T")[0] === dateStr
           );
 
+          const dayRevenue = dayAppts.reduce((acc, a) => acc + (a.priceCents || 0), 0);
+          const isExpanded = !!weekExpandedDays[dateStr];
+          const displayedAppts = isExpanded ? dayAppts : dayAppts.slice(0, 3);
+
           return (
             <div
               key={dateStr}
@@ -1092,30 +1458,58 @@ export default function BusinessCalendarPage() {
                 border: isToday ? "1.5px solid #38bdf8" : "1px solid #1e293b",
                 display: "flex",
                 flexDirection: "column",
-                minHeight: "480px",
+                maxHeight: "620px",
                 overflow: "hidden",
+                boxShadow: isToday ? "0 0 16px rgba(56, 189, 248, 0.15)" : "none",
               }}
             >
+              {/* Day Header */}
               <div
                 style={{
-                  padding: "12px",
+                  padding: "10px 12px",
                   borderBottom: "1px solid #1e293b",
                   backgroundColor: isToday ? "rgba(56, 189, 248, 0.08)" : "#131c31",
                   textAlign: "center",
                 }}
               >
-                <div style={{ fontSize: "12px", color: isToday ? "#38bdf8" : "#94a3b8", fontWeight: 800, textTransform: "uppercase" }}>
-                  {dayName}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "11px", color: isToday ? "#38bdf8" : "#94a3b8", fontWeight: 800, textTransform: "uppercase" }}>
+                    {dayName}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate(dateStr);
+                      setViewMode("day");
+                    }}
+                    style={{
+                      fontSize: "10px",
+                      color: "#38bdf8",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                      padding: "0 2px",
+                    }}
+                    title={`Open full day view for ${dateStr}`}
+                  >
+                    View Day →
+                  </button>
                 </div>
-                <div style={{ fontSize: "18px", fontWeight: 900, color: "#f8fafc", marginTop: "2px" }}>
+
+                <div style={{ fontSize: "18px", fontWeight: 900, color: "#f8fafc", margin: "2px 0" }}>
                   {currentDay.getDate()}
                 </div>
-                <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
-                  {dayAppts.length} bookings {dayHolds.length > 0 ? `• ${dayHolds.length} holds` : ""}
+
+                <div style={{ display: "flex", justifyContent: "center", gap: "6px", fontSize: "10.5px", color: "#64748b", flexWrap: "wrap" }}>
+                  <span>{dayAppts.length} bkgs</span>
+                  {dayHolds.length > 0 && <span style={{ color: "#fbbf24" }}>• {dayHolds.length} holds</span>}
+                  {dayRevenue > 0 && <span style={{ color: "#34d399" }}>• {formatMoney(dayRevenue)}</span>}
                 </div>
               </div>
 
-              <div style={{ padding: "10px", display: "flex", flexDirection: "column", gap: "8px", flex: 1, overflowY: "auto" }}>
+              {/* Day Slots List */}
+              <div style={{ padding: "8px", display: "flex", flexDirection: "column", gap: "6px", flex: 1, overflowY: "auto", scrollbarWidth: "thin" }}>
                 {/* Holds in Week View */}
                 {dayHolds.map((hold) => {
                   const minutesLeft = Math.max(0, Math.round((new Date(hold.expiresAt).getTime() - Date.now()) / 60000));
@@ -1129,19 +1523,19 @@ export default function BusinessCalendarPage() {
                         border: "1px dashed rgba(245, 158, 11, 0.6)",
                         borderLeft: "3px solid #f59e0b",
                         borderRadius: "6px",
-                        padding: "8px",
+                        padding: "6px 8px",
                         cursor: "pointer",
-                        fontSize: "12px",
+                        fontSize: "11px",
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, color: "#fbbf24" }}>
                         <span>{new Date(hold.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                        <span style={{ fontSize: "9.5px", color: "#f59e0b" }}>HOLD ({minutesLeft}m)</span>
+                        <span style={{ fontSize: "9px", color: "#f59e0b" }}>HOLD ({minutesLeft}m)</span>
                       </div>
                       <div style={{ fontWeight: 700, color: "#f8fafc", margin: "2px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {hold.customerName}
+                        {hold.customerName || "Waitlist Guest"}
                       </div>
-                      <div style={{ color: "#94a3b8", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <div style={{ color: "#94a3b8", fontSize: "10.5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {hold.serviceName}
                       </div>
                     </div>
@@ -1149,11 +1543,11 @@ export default function BusinessCalendarPage() {
                 })}
 
                 {dayAppts.length === 0 && dayHolds.length === 0 ? (
-                  <div style={{ color: "#475569", fontSize: "12px", textAlign: "center", marginTop: "24px" }}>
+                  <div style={{ color: "#475569", fontSize: "11.5px", textAlign: "center", marginTop: "24px" }}>
                     No bookings
                   </div>
                 ) : (
-                  dayAppts.map((appt) => {
+                  displayedAppts.map((appt) => {
                     const badge = statusBadges[appt.status] || { bg: "#334155", text: "#fff", border: "#475569" };
                     return (
                       <div
@@ -1164,24 +1558,54 @@ export default function BusinessCalendarPage() {
                           border: `1px solid ${badge.border}`,
                           borderLeft: `3px solid ${badge.text}`,
                           borderRadius: "6px",
-                          padding: "8px",
+                          padding: "6px 8px",
                           cursor: "pointer",
-                          fontSize: "12px",
+                          fontSize: "11px",
+                          transition: "transform 0.1s ease",
                         }}
+                        onMouseEnter={(el) => (el.currentTarget.style.transform = "translateY(-1px)")}
+                        onMouseLeave={(el) => (el.currentTarget.style.transform = "translateY(0)")}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, color: "#38bdf8" }}>
                           <span>{new Date(appt.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                          <span style={{ fontSize: "10px", color: badge.text }}>{appt.status}</span>
+                          <span style={{ fontSize: "9.5px", color: badge.text }}>{appt.status}</span>
                         </div>
                         <div style={{ fontWeight: 700, color: "#f8fafc", margin: "2px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {appt.service?.name || "Service"}
                         </div>
-                        <div style={{ color: "#94a3b8", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <div style={{ color: "#94a3b8", fontSize: "10.5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {appt.customer?.fullName || "Guest"}
                         </div>
                       </div>
                     );
                   })
+                )}
+
+                {/* Week View "See More / Collapse" Expander Button */}
+                {dayAppts.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setWeekExpandedDays((prev) => ({ ...prev, [dateStr]: !prev[dateStr] }))}
+                    style={{
+                      padding: "5px 8px",
+                      borderRadius: "6px",
+                      backgroundColor: "rgba(56, 189, 248, 0.08)",
+                      border: "1px solid rgba(56, 189, 248, 0.25)",
+                      color: "#38bdf8",
+                      fontSize: "11px",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "4px",
+                      marginTop: "2px",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <span>{isExpanded ? "Collapse to 3" : `+ ${dayAppts.length - 3} more · See all`}</span>
+                    {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
                 )}
               </div>
             </div>
@@ -1208,7 +1632,10 @@ export default function BusinessCalendarPage() {
         const dayAppts = filteredAppointments.filter(
           (a) => new Date(a.startAt).toISOString().split("T")[0] === dStr
         );
-        cells.push({ dateStr: dStr, dayNum, appts: dayAppts });
+        const dayHolds = waitlistHolds.filter(
+          (h) => new Date(h.startAt).toISOString().split("T")[0] === dStr
+        );
+        cells.push({ dateStr: dStr, dayNum, appts: dayAppts, holds: dayHolds });
       } else {
         cells.push(null);
       }
@@ -1217,10 +1644,10 @@ export default function BusinessCalendarPage() {
     const dayHeaders = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
     return (
-      <div style={{ backgroundColor: "#0f172a", borderRadius: "12px", border: "1px solid #1e293b", overflow: "hidden" }}>
+      <div style={{ backgroundColor: "#0f172a", borderRadius: "12px", border: "1px solid #1e293b", overflow: "hidden", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid #1e293b", backgroundColor: "#131c31" }}>
           {dayHeaders.map((dh) => (
-            <div key={dh} style={{ padding: "12px", textAlign: "center", fontSize: "12px", fontWeight: 800, color: "#94a3b8" }}>
+            <div key={dh} style={{ padding: "10px", textAlign: "center", fontSize: "11.5px", fontWeight: 800, color: "#94a3b8" }}>
               {dh}
             </div>
           ))}
@@ -1242,10 +1669,12 @@ export default function BusinessCalendarPage() {
                   setViewMode("day");
                 }}
                 style={{
-                  minHeight: "110px",
+                  minHeight: "105px",
+                  maxHeight: "135px",
+                  overflowY: "hidden",
                   borderBottom: "1px solid #1e293b",
                   borderRight: "1px solid #1e293b",
-                  padding: "8px",
+                  padding: "6px 8px",
                   cursor: "pointer",
                   backgroundColor: isSelected ? "rgba(56, 189, 248, 0.08)" : isToday ? "rgba(16, 185, 129, 0.04)" : "transparent",
                   transition: "background-color 0.15s ease",
@@ -1256,11 +1685,11 @@ export default function BusinessCalendarPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span
                     style={{
-                      fontSize: "13px",
+                      fontSize: "12.5px",
                       fontWeight: isToday ? 900 : 700,
                       color: isToday ? "#38bdf8" : "#cbd5e1",
-                      width: "24px",
-                      height: "24px",
+                      width: "22px",
+                      height: "22px",
                       display: "grid",
                       placeItems: "center",
                       borderRadius: "50%",
@@ -1269,23 +1698,30 @@ export default function BusinessCalendarPage() {
                   >
                     {cell.dayNum}
                   </span>
-                  {cell.appts.length > 0 && (
-                    <span style={{ fontSize: "11px", fontWeight: 800, padding: "1px 6px", borderRadius: "9999px", backgroundColor: "#0284c7", color: "#fff" }}>
-                      {cell.appts.length}
-                    </span>
-                  )}
+                  <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                    {cell.holds.length > 0 && (
+                      <span style={{ fontSize: "10px", fontWeight: 800, padding: "1px 5px", borderRadius: "9999px", backgroundColor: "#f59e0b", color: "#0f172a" }}>
+                        ⏳ {cell.holds.length}
+                      </span>
+                    )}
+                    {cell.appts.length > 0 && (
+                      <span style={{ fontSize: "10.5px", fontWeight: 800, padding: "1px 6px", borderRadius: "9999px", backgroundColor: "#0284c7", color: "#fff" }}>
+                        {cell.appts.length}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                  {cell.appts.slice(0, 3).map((a) => (
+                <div style={{ marginTop: "4px", display: "flex", flexDirection: "column", gap: "3px" }}>
+                  {cell.appts.slice(0, 2).map((a) => (
                     <div
                       key={a.id}
                       style={{
-                        fontSize: "11px",
+                        fontSize: "10.5px",
                         fontWeight: 600,
                         backgroundColor: "#1e293b",
                         color: "#f8fafc",
-                        padding: "2px 6px",
+                        padding: "2px 5px",
                         borderRadius: "4px",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
@@ -1295,9 +1731,19 @@ export default function BusinessCalendarPage() {
                       {new Date(a.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} {a.service?.name}
                     </div>
                   ))}
-                  {cell.appts.length > 3 && (
-                    <span style={{ fontSize: "10.5px", color: "#94a3b8", fontWeight: 700 }}>
-                      +{cell.appts.length - 3} more
+                  {cell.appts.length > 2 && (
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        color: "#38bdf8",
+                        fontWeight: 800,
+                        padding: "1px 4px",
+                        borderRadius: "4px",
+                        backgroundColor: "rgba(56, 189, 248, 0.1)",
+                        display: "inline-block",
+                      }}
+                    >
+                      +{cell.appts.length - 2} more · View day →
                     </span>
                   )}
                 </div>
@@ -1317,7 +1763,7 @@ export default function BusinessCalendarPage() {
     ];
 
     return (
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${columns.length}, minmax(240px, 1fr))`, gap: "14px", overflowX: "auto", paddingBottom: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${columns.length}, minmax(260px, 1fr))`, gap: "14px", overflowX: "auto", paddingBottom: "16px" }}>
         {columns.map((col) => {
           const colAppts = filteredAppointments.filter((a) => {
             if (col.id === "UNASSIGNED") return !a.staffId;
@@ -1331,6 +1777,10 @@ export default function BusinessCalendarPage() {
             return h.staffId === col.id;
           });
 
+          const colRevenue = colAppts.reduce((acc, a) => acc + (a.priceCents || 0), 0);
+          const isExpanded = !!staffExpandedRoster[col.id];
+          const displayedAppts = isExpanded ? colAppts : colAppts.slice(0, 4);
+
           return (
             <div
               key={col.id}
@@ -1340,21 +1790,48 @@ export default function BusinessCalendarPage() {
                 border: "1px solid #1e293b",
                 display: "flex",
                 flexDirection: "column",
-                minHeight: "520px",
+                maxHeight: "640px",
+                boxShadow: "0 10px 24px rgba(0,0,0,0.25)",
               }}
             >
-              <div style={{ padding: "14px 16px", borderBottom: "1px solid #1e293b", backgroundColor: "#131c31" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <User size={16} color="#38bdf8" />
-                  <span style={{ fontSize: "14px", fontWeight: 800, color: "#f8fafc" }}>{col.name}</span>
+              <div style={{ padding: "12px 14px", borderBottom: "1px solid #1e293b", backgroundColor: "#131c31" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <User size={15} color="#38bdf8" />
+                    <span style={{ fontSize: "13.5px", fontWeight: 800, color: "#f8fafc" }}>{col.name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewStaffId(col.id === "UNASSIGNED" ? "" : col.id);
+                      setNewApptDate(selectedDate);
+                      setIsNewModalOpen(true);
+                    }}
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      backgroundColor: "rgba(56, 189, 248, 0.12)",
+                      border: "1px solid rgba(56, 189, 248, 0.3)",
+                      color: "#38bdf8",
+                      fontSize: "11px",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                    title={`Book appointment with ${col.name}`}
+                  >
+                    + Book
+                  </button>
                 </div>
-                {col.title && <div style={{ fontSize: "11.5px", color: "#94a3b8", marginTop: "2px" }}>{col.title}</div>}
-                <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>
-                  {colAppts.length} bookings {colHolds.length > 0 ? `• ${colHolds.length} holds` : ""}
+
+                {col.title && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>{col.title}</div>}
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "#64748b", marginTop: "4px" }}>
+                  <span>{colAppts.length} bookings {colHolds.length > 0 ? `• ${colHolds.length} holds` : ""}</span>
+                  {colRevenue > 0 && <span style={{ color: "#34d399", fontWeight: 700 }}>{formatMoney(colRevenue)}</span>}
                 </div>
               </div>
 
-              <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "10px", flex: 1, overflowY: "auto" }}>
+              <div style={{ padding: "10px", display: "flex", flexDirection: "column", gap: "8px", flex: 1, overflowY: "auto", scrollbarWidth: "thin" }}>
                 {/* Hold blocks for staff */}
                 {colHolds.map((hold) => {
                   const minutesLeft = Math.max(0, Math.round((new Date(hold.expiresAt).getTime() - Date.now()) / 60000));
@@ -1368,26 +1845,26 @@ export default function BusinessCalendarPage() {
                         border: "1px dashed rgba(245, 158, 11, 0.6)",
                         borderLeft: "4px solid #f59e0b",
                         borderRadius: "8px",
-                        padding: "10px 12px",
+                        padding: "8px 10px",
                         cursor: "pointer",
                         boxShadow: "0 2px 6px rgba(245, 158, 11, 0.2)",
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: "12px", fontWeight: 800, color: "#fbbf24" }}>
+                        <span style={{ fontSize: "11.5px", fontWeight: 800, color: "#fbbf24" }}>
                           {new Date(hold.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </span>
-                        <span style={{ fontSize: "10px", fontWeight: 850, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#f59e0b", color: "#0f172a" }}>
+                        <span style={{ fontSize: "9.5px", fontWeight: 850, padding: "1px 5px", borderRadius: "4px", backgroundColor: "#f59e0b", color: "#0f172a" }}>
                           HOLD ({minutesLeft}m)
                         </span>
                       </div>
-                      <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#f8fafc", marginTop: "4px" }}>
+                      <div style={{ fontSize: "12.5px", fontWeight: 700, color: "#f8fafc", marginTop: "3px" }}>
                         Hold: {hold.customerName || "Waitlist Guest"}
                       </div>
-                      <div style={{ fontSize: "11.5px", color: "#94a3b8", marginTop: "2px" }}>
+                      <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
                         {hold.serviceName}
                       </div>
-                      <div style={{ textAlign: "right", marginTop: "6px", fontSize: "11px", color: "#fbbf24", fontWeight: 700 }}>
+                      <div style={{ textAlign: "right", marginTop: "4px", fontSize: "10.5px", color: "#fbbf24", fontWeight: 700 }}>
                         Click to Override →
                       </div>
                     </div>
@@ -1395,11 +1872,11 @@ export default function BusinessCalendarPage() {
                 })}
 
                 {colAppts.length === 0 && colHolds.length === 0 ? (
-                  <div style={{ textAlign: "center", color: "#475569", fontSize: "13px", marginTop: "36px" }}>
+                  <div style={{ textAlign: "center", color: "#475569", fontSize: "12px", marginTop: "36px" }}>
                     No bookings for this specialist
                   </div>
                 ) : (
-                  colAppts.map((appt) => {
+                  displayedAppts.map((appt) => {
                     const badge = statusBadges[appt.status] || { bg: "#334155", text: "#fff", border: "#475569" };
                     return (
                       <div
@@ -1410,32 +1887,62 @@ export default function BusinessCalendarPage() {
                           border: `1px solid ${badge.border}`,
                           borderLeft: `4px solid ${badge.text}`,
                           borderRadius: "8px",
-                          padding: "10px 12px",
+                          padding: "8px 10px",
                           cursor: "pointer",
                           boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                          transition: "transform 0.1s ease",
                         }}
+                        onMouseEnter={(el) => (el.currentTarget.style.transform = "translateY(-1px)")}
+                        onMouseLeave={(el) => (el.currentTarget.style.transform = "translateY(0)")}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: "12px", fontWeight: 800, color: "#38bdf8" }}>
+                          <span style={{ fontSize: "11.5px", fontWeight: 800, color: "#38bdf8" }}>
                             {new Date(appt.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
-                          <span style={{ fontSize: "10.5px", fontWeight: 800, padding: "2px 6px", borderRadius: "4px", backgroundColor: badge.bg, color: badge.text }}>
+                          <span style={{ fontSize: "10px", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", backgroundColor: badge.bg, color: badge.text }}>
                             {appt.status}
                           </span>
                         </div>
-                        <div style={{ fontSize: "14px", fontWeight: 700, color: "#f8fafc", marginTop: "4px" }}>
+                        <div style={{ fontSize: "13px", fontWeight: 700, color: "#f8fafc", marginTop: "3px" }}>
                           {appt.service?.name || "Service"}
                         </div>
-                        <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>
+                        <div style={{ fontSize: "11.5px", color: "#94a3b8", marginTop: "2px" }}>
                           Client: <strong style={{ color: "#e2e8f0" }}>{appt.customer?.fullName || "Guest"}</strong>
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontSize: "12px", color: "#4ade80", fontWeight: 800 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", fontSize: "11.5px", color: "#4ade80", fontWeight: 800 }}>
                           <span>{formatMoney(appt.priceCents, appt.currency)}</span>
-                          <span style={{ color: "#38bdf8", fontSize: "11px" }}>Inspect →</span>
+                          <span style={{ color: "#38bdf8", fontSize: "10.5px" }}>Inspect →</span>
                         </div>
                       </div>
                     );
                   })
+                )}
+
+                {/* Staff Roster "See More" Accordion */}
+                {colAppts.length > 4 && (
+                  <button
+                    type="button"
+                    onClick={() => setStaffExpandedRoster((prev) => ({ ...prev, [col.id]: !prev[col.id] }))}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "6px",
+                      backgroundColor: "rgba(56, 189, 248, 0.08)",
+                      border: "1px solid rgba(56, 189, 248, 0.25)",
+                      color: "#38bdf8",
+                      fontSize: "11px",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "4px",
+                      marginTop: "4px",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <span>{isExpanded ? "Collapse to 4" : `+ ${colAppts.length - 4} more · See all`}</span>
+                    {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
                 )}
               </div>
             </div>
@@ -1698,53 +2205,132 @@ export default function BusinessCalendarPage() {
           gap: "16px",
         }}
       >
-        {/* Left: View Switcher */}
-        <div style={{ display: "flex", backgroundColor: "#1e293b", padding: "3px", borderRadius: "8px", border: "1px solid #334155" }}>
-          {(
-            [
-              { id: "day", label: "Day" },
-              { id: "week", label: "Week" },
-              { id: "month", label: "Month" },
-              { id: "staff", label: "Staff Roster" },
-              { id: "queue", label: "Queue / All" },
-            ] as Array<{ id: ViewMode; label: string }>
-          ).map((vm) => {
-            const isActive = viewMode === vm.id;
-            return (
+        {/* Left: View Switcher & Layout Controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", backgroundColor: "#1e293b", padding: "3px", borderRadius: "8px", border: "1px solid #334155" }}>
+            {(
+              [
+                { id: "day", label: "Day" },
+                { id: "week", label: "Week" },
+                { id: "month", label: "Month" },
+                { id: "staff", label: "Staff Roster" },
+                { id: "queue", label: "Queue / All" },
+              ] as Array<{ id: ViewMode; label: string }>
+            ).map((vm) => {
+              const isActive = viewMode === vm.id;
+              return (
+                <button
+                  key={vm.id}
+                  onClick={() => setViewMode(vm.id)}
+                  style={{
+                    position: "relative",
+                    padding: "6px 14px",
+                    borderRadius: "6px",
+                    border: "none",
+                    backgroundColor: "transparent",
+                    color: isActive ? "#fff" : "#94a3b8",
+                    fontSize: "13px",
+                    fontWeight: isActive ? 800 : 600,
+                    cursor: "pointer",
+                    transition: "color 0.15s ease",
+                  }}
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="calendar-view-pill"
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        borderRadius: "6px",
+                        backgroundColor: "#0284c7",
+                        boxShadow: "0 2px 8px rgba(2, 132, 199, 0.4)",
+                        zIndex: 1,
+                      }}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <span style={{ position: "relative", zIndex: 2 }}>{vm.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Quick Density & Range toggles */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div style={{ display: "inline-flex", backgroundColor: "#1e293b", padding: "2px", borderRadius: "6px", border: "1px solid #334155" }}>
               <button
-                key={vm.id}
-                onClick={() => setViewMode(vm.id)}
+                type="button"
+                onClick={() => setDensityMode("compact")}
                 style={{
-                  position: "relative",
-                  padding: "6px 14px",
-                  borderRadius: "6px",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
                   border: "none",
-                  backgroundColor: "transparent",
-                  color: isActive ? "#fff" : "#94a3b8",
-                  fontSize: "13px",
-                  fontWeight: isActive ? 800 : 600,
+                  backgroundColor: densityMode === "compact" ? "#0284c7" : "transparent",
+                  color: densityMode === "compact" ? "#fff" : "#94a3b8",
+                  fontSize: "11px",
+                  fontWeight: 700,
                   cursor: "pointer",
-                  transition: "color 0.15s ease",
                 }}
+                title="Compact density mode"
               >
-                {isActive && (
-                  <motion.span
-                    layoutId="calendar-view-pill"
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      borderRadius: "6px",
-                      backgroundColor: "#0284c7",
-                      boxShadow: "0 2px 8px rgba(2, 132, 199, 0.4)",
-                      zIndex: 1,
-                    }}
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                )}
-                <span style={{ position: "relative", zIndex: 2 }}>{vm.label}</span>
+                Compact
               </button>
-            );
-          })}
+              <button
+                type="button"
+                onClick={() => setDensityMode("comfortable")}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  border: "none",
+                  backgroundColor: densityMode === "comfortable" ? "#0284c7" : "transparent",
+                  color: densityMode === "comfortable" ? "#fff" : "#94a3b8",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+                title="Comfortable density mode"
+              >
+                Comfortable
+              </button>
+            </div>
+
+            <div style={{ display: "inline-flex", backgroundColor: "#1e293b", padding: "2px", borderRadius: "6px", border: "1px solid #334155" }}>
+              <button
+                type="button"
+                onClick={() => setTimeRangePreset("core")}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  border: "none",
+                  backgroundColor: timeRangePreset === "core" ? "#334155" : "transparent",
+                  color: timeRangePreset === "core" ? "#38bdf8" : "#94a3b8",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+                title="Business core hours: 07:00 to 21:00 with collapsible off-hours"
+              >
+                Core (07–21)
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimeRangePreset("full")}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  border: "none",
+                  backgroundColor: timeRangePreset === "full" ? "#334155" : "transparent",
+                  color: timeRangePreset === "full" ? "#38bdf8" : "#94a3b8",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+                title="Continuous 24-hour timeline"
+              >
+                24h Full
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Center: Date Navigator */}

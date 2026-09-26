@@ -109,10 +109,10 @@ export function sanitizeErrorMessage(rawError: unknown, fallbackMessage = "An un
 
   // 7. General clean string (if it doesn't contain code stacks or paths)
   if (!/[\\/](node_modules|src|apps|packages)[\\/]|at [A-Za-z0-9_.]+ \(/i.test(rawString)) {
-    // Truncate overly long technical messages
-    if (rawString.length > 160) {
+    // Return clean user-facing message (truncate if extremely long)
+    if (rawString.length > 350) {
       return {
-        message: fallbackMessage,
+        message: rawString.slice(0, 347) + "...",
         refId: potentialRefId,
       };
     }

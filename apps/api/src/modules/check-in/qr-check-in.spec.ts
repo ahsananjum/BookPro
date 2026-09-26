@@ -13,6 +13,12 @@ describe("QrCheckInService — Signed Tokens & Window Verification", () => {
                 findFirst: jest.fn(),
                 update: jest.fn(),
             },
+            appointmentHistory: {
+                create: jest.fn(),
+            },
+            outboxEvent: {
+                create: jest.fn(),
+            },
             auditLog: {
                 create: jest.fn(),
             },
