@@ -1,7 +1,8 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit, Optional } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import { OutboxService } from "../outbox/outbox.service";
 import { GoogleCalendarAdapter, EncryptionService } from "@bookpro/server-core";
+import { RealtimeService } from "../realtime/realtime.service";
 
 @Injectable()
 export class CronService implements OnModuleInit {
@@ -12,6 +13,7 @@ export class CronService implements OnModuleInit {
     constructor(
         private readonly prisma: PrismaService,
         private readonly outboxService: OutboxService,
+        @Optional() private readonly realtimeService?: RealtimeService,
     ) { }
 
     onModuleInit() {
@@ -223,32 +225,91 @@ export class CronService implements OnModuleInit {
 
     /**
      * Executes automatic lifecycle transitions:
-     * 1. Auto-Start: CHECKED_IN where startAt <= now -> IN_PROGRESS
-     * 2. Auto-Complete: IN_PROGRESS where endAt <= now - 10m -> COMPLETED
-     * 3. Auto-No-Show: CONFIRMED where startAt <= now - 30m -> NO_SHOW
+     * 1. Auto-Start: CONFIRMED or CHECKED_IN where startAt <= now and endAt > now -> IN_PROGRESS
+     * 2. Auto-Complete: Active appointments (IN_PROGRESS, CONFIRMED, CHECKED_IN) where endAt <= now -> COMPLETED
      */
     private async processAppointmentLifecycle(now: Date): Promise<{ started: number; completed: number; noShow: number }> {
-        const autoStarted = await this.prisma.appointment.updateMany({
-            where: { status: "CHECKED_IN", startAt: { lte: now } },
-            data: { status: "IN_PROGRESS" },
+        const toStart = await this.prisma.appointment.findMany({
+            where: {
+                status: { in: ["CONFIRMED", "CHECKED_IN"] },
+                startAt: { lte: now },
+                endAt: { gt: now },
+            },
+            select: { id: true, organizationId: true, status: true },
         });
 
-        const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
-        const autoCompleted = await this.prisma.appointment.updateMany({
-            where: { status: "IN_PROGRESS", endAt: { lte: tenMinutesAgo } },
-            data: { status: "COMPLETED" },
+        let started = 0;
+        for (const appt of toStart) {
+            await this.prisma.$transaction(async (tx) => {
+                await tx.appointment.update({
+                    where: { id: appt.id },
+                    data: { status: "IN_PROGRESS" },
+                });
+                await tx.appointmentHistory.create({
+                    data: {
+                        appointmentId: appt.id,
+                        actorType: "SYSTEM",
+                        actorId: "CRON_WORKER",
+                        action: "STATUS_CHANGE",
+                        fromStatus: appt.status,
+                        toStatus: "IN_PROGRESS",
+                        changes: { reason: "Automatic lifecycle transition to in-progress" },
+                    },
+                });
+            });
+            started++;
+            if (this.realtimeService) {
+                await this.realtimeService.broadcastEvent({
+                    organizationId: appt.organizationId,
+                    type: "appointment.status_changed",
+                    entityId: appt.id,
+                    timestamp: now.toISOString(),
+                });
+            }
+        }
+
+        const toComplete = await this.prisma.appointment.findMany({
+            where: {
+                status: { in: ["IN_PROGRESS", "CONFIRMED", "CHECKED_IN"] },
+                endAt: { lte: now },
+            },
+            select: { id: true, organizationId: true, status: true },
         });
 
-        const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
-        const autoNoShow = await this.prisma.appointment.updateMany({
-            where: { status: "CONFIRMED", startAt: { lte: thirtyMinutesAgo } },
-            data: { status: "NO_SHOW" },
-        });
+        let completed = 0;
+        for (const appt of toComplete) {
+            await this.prisma.$transaction(async (tx) => {
+                await tx.appointment.update({
+                    where: { id: appt.id },
+                    data: { status: "COMPLETED" },
+                });
+                await tx.appointmentHistory.create({
+                    data: {
+                        appointmentId: appt.id,
+                        actorType: "SYSTEM",
+                        actorId: "CRON_WORKER",
+                        action: "STATUS_CHANGE",
+                        fromStatus: appt.status,
+                        toStatus: "COMPLETED",
+                        changes: { reason: "Automatic lifecycle transition to completed" },
+                    },
+                });
+            });
+            completed++;
+            if (this.realtimeService) {
+                await this.realtimeService.broadcastEvent({
+                    organizationId: appt.organizationId,
+                    type: "appointment.status_changed",
+                    entityId: appt.id,
+                    timestamp: now.toISOString(),
+                });
+            }
+        }
 
         return {
-            started: autoStarted.count,
-            completed: autoCompleted.count,
-            noShow: autoNoShow.count,
+            started,
+            completed,
+            noShow: 0,
         };
     }
 
@@ -412,6 +473,16 @@ export class CronService implements OnModuleInit {
                 // 3. Outbound Google Calendar Sync
                 if (appt.staffId) {
                     await this.syncToGoogleCalendar(appt);
+                }
+
+                // 4. Real-time Live Broadcast to Owner/Staff Portal
+                if (this.realtimeService) {
+                    await this.realtimeService.broadcastEvent({
+                        organizationId: appt.organizationId,
+                        type: "appointment.created",
+                        entityId: appt.id,
+                        timestamp: new Date().toISOString(),
+                    });
                 }
                 break;
             }

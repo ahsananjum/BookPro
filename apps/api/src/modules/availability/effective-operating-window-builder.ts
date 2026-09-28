@@ -35,23 +35,12 @@ const DAY_NAME_TO_NUM: Record<string, number> = {
 
 export function normalizeOperatingHours(raw: any): OperatingHourRule[] {
     if (!raw) {
-        // Default Mon-Sun 08:00 - 20:00 when unconfigured
-        return [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
-            dayOfWeek,
-            startTime: "08:00",
-            endTime: "20:00",
-            isClosed: false,
-        }));
+        return [];
     }
 
     if (Array.isArray(raw)) {
         if (raw.length === 0) {
-            return [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
-                dayOfWeek,
-                startTime: "08:00",
-                endTime: "20:00",
-                isClosed: false,
-            }));
+            return [];
         }
         return raw.map((item: any) => ({
             dayOfWeek: Number(item.dayOfWeek ?? item.day ?? 0),
@@ -97,16 +86,10 @@ export function normalizeOperatingHours(raw: any): OperatingHourRule[] {
                 }
             }
         }
-        if (rules.length > 0) return rules;
+        return rules;
     }
 
-    // Default fallback
-    return [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
-        dayOfWeek,
-        startTime: "08:00",
-        endTime: "20:00",
-        isClosed: false,
-    }));
+    return [];
 }
 
 @Injectable()

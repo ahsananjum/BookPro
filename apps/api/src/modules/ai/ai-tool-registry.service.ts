@@ -851,7 +851,7 @@ export class AIToolRegistryService {
                     return isFormRequired && fields.some((f) => f.required);
                 });
 
-                if (!hasRequiredQuestions) {
+                if (!hasRequiredQuestions && hold?.id && this.prisma.bookingHold?.update) {
                     await this.prisma.bookingHold.update({
                         where: { id: hold.id },
                         data: {

@@ -65,6 +65,7 @@ function makePrisma() {
         bookingHold: {
             findMany: jest.fn().mockResolvedValue([]),
             count: jest.fn().mockResolvedValue(0),
+            update: jest.fn().mockResolvedValue({}),
         },
         waitlistEntry: {
             findFirst: jest.fn(),
@@ -73,6 +74,7 @@ function makePrisma() {
             update: jest.fn().mockResolvedValue({ id: "wait-1", status: "CANCELLED" }),
         },
         auditLog: { create: jest.fn().mockResolvedValue({}) },
+        intakeForm: { findMany: jest.fn().mockResolvedValue([]) },
         $transaction: jest.fn().mockImplementation(async (ops: any[]) => Promise.all(ops)),
     } as any;
 }
@@ -82,7 +84,15 @@ function makeDependencies() {
         services: { getServices: jest.fn().mockResolvedValue([]), getServiceById: jest.fn().mockResolvedValue({ id: "66666666-6666-4666-8666-666666666666", name: "Cut" }) },
         availability: { searchAvailability: jest.fn(), validateAvailability: jest.fn() },
         appointments: { getAppointmentDetail: jest.fn(), reschedule: jest.fn(), cancel: jest.fn(), convertHoldToAppointment: jest.fn() },
-        holds: { getHold: jest.fn(), createHold: jest.fn() },
+        holds: {
+            getHold: jest.fn(),
+            createHold: jest.fn().mockImplementation((args: any) => Promise.resolve({
+                id: "hold-mock-1",
+                expiresAt: new Date(Date.now() + 600_000),
+                quoteSnapshot: {},
+                ...args,
+            })),
+        },
         pricing: { calculateQuote: jest.fn() },
         policies: {
             getCancellationQuote: jest.fn(),

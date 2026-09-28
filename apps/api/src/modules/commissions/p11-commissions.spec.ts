@@ -1,6 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { INestApplication } from "@nestjs/common";
-import * as request from "supertest";
+import request from "supertest";
 import * as jwt from "jsonwebtoken";
 import { AppModule } from "../../app.module";
 import { PrismaService } from "../database/prisma.service";
@@ -20,6 +20,7 @@ describe("P11 Commissions, Payment Hub & Customer Billing Live Integration Suite
     const userOwnerAId = "00000000-0000-0000-0000-000000000010";
     const userOwnerBId = "00000000-0000-0000-0000-000000000040";
     const userCustomerAId = "00000000-0000-0000-0000-000000000020";
+    const customerAId = "00000000-0000-0000-0000-000000000030";
 
     let tokenOwnerA: string;
     let tokenOwnerB: string;
@@ -99,7 +100,7 @@ describe("P11 Commissions, Payment Hub & Customer Billing Live Integration Suite
                     memberships: [],
                     customers: [
                         {
-                            id: "cust-a",
+                            id: customerAId,
                             organizationId: orgAId,
                             userId: userCustomerAId,
                         },
@@ -130,6 +131,42 @@ describe("P11 Commissions, Payment Hub & Customer Billing Live Integration Suite
                 currency: "USD",
                 stripeAccountId: "acct_test123",
             };
+        });
+
+        const mockRules: any[] = [];
+        (jest.spyOn(prisma.commissionRule, "create") as any).mockImplementation(async (args: any) => {
+            const rule = {
+                id: "00000000-0000-0000-0000-000000000501",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                ruleVersion: 1,
+                staff: null,
+                ...args.data,
+            };
+            mockRules.push(rule);
+            return rule;
+        });
+
+        (jest.spyOn(prisma.commissionRule, "findFirst") as any).mockImplementation(async (args: any) => {
+            return mockRules.find((r) => r.id === args?.where?.id) || null;
+        });
+
+        (jest.spyOn(prisma.commissionRule, "update") as any).mockImplementation(async (args: any) => {
+            const idx = mockRules.findIndex((r) => r.id === args?.where?.id);
+            if (idx !== -1) {
+                mockRules[idx] = { ...mockRules[idx], ...args.data, staff: null };
+                return mockRules[idx];
+            }
+            return null;
+        });
+
+        (jest.spyOn(prisma.commissionRule, "delete") as any).mockImplementation(async (args: any) => {
+            const idx = mockRules.findIndex((r) => r.id === args?.where?.id);
+            if (idx !== -1) {
+                const deleted = mockRules.splice(idx, 1)[0];
+                return deleted;
+            }
+            return null;
         });
 
         tokenOwnerA = jwt.sign(
@@ -238,11 +275,9 @@ describe("P11 Commissions, Payment Hub & Customer Billing Live Integration Suite
         it("should create a new commission rule and enforce validation", async () => {
             const newRulePayload = {
                 name: "E2E Master Stylist Tier",
-                type: "PERCENTAGE",
-                rate: 2500, // 25%
-                serviceCategory: "Styling",
-                minServicePriceCents: 5000,
-                isActive: true,
+                calculationType: "PERCENTAGE",
+                rateValue: 2500, // 25%
+                calculationBasis: "NET_SERVICE_PRICE",
             };
 
             const res = await request(app.getHttpServer())
@@ -262,7 +297,7 @@ describe("P11 Commissions, Payment Hub & Customer Billing Live Integration Suite
 
             const updatePayload = {
                 name: "E2E Master Stylist Tier (Updated)",
-                rate: 3000, // 30%
+                rateValue: 3000, // 30%
                 isActive: false,
             };
 
@@ -302,7 +337,7 @@ describe("P11 Commissions, Payment Hub & Customer Billing Live Integration Suite
     describe("3. Customer Portal Billing & Receipts API", () => {
         it("should handle customer billing query", async () => {
             (jest.spyOn(prisma.customer, "findFirst") as any).mockResolvedValue({
-                id: "cust-a",
+                id: customerAId,
                 userId: userCustomerAId,
                 organizationId: orgAId,
                 firstName: "Victoria",
@@ -312,20 +347,55 @@ describe("P11 Commissions, Payment Hub & Customer Billing Live Integration Suite
                 totalSpentCents: 25000,
             });
 
+            (jest.spyOn(prisma.customer, "update") as any).mockResolvedValue({
+                id: customerAId,
+                totalSpentCents: 25000,
+            });
+
+            (jest.spyOn(prisma.appointment, "findMany") as any).mockResolvedValue([
+                {
+                    id: "00000000-0000-0000-0000-000000000101",
+                    serviceId: "00000000-0000-0000-0000-000000000201",
+                    service: { name: "Signature Balayage", priceCents: 25000, durationMin: 60 },
+                    staff: { displayName: "Senior Colorist" },
+                    location: { name: "Downtown Studio" },
+                    startAt: new Date(),
+                    endAt: new Date(),
+                    priceCents: 25000,
+                    currency: "USD",
+                    paymentStatus: "PAID",
+                    paymentRecords: [
+                        {
+                            id: "00000000-0000-0000-0000-000000000301",
+                            amountCents: 25000,
+                            currency: "USD",
+                            status: "SUCCEEDED",
+                            provider: "STRIPE",
+                            metadata: { paymentMethod: "Card" },
+                            stripePaymentIntentId: "pi_test123",
+                            createdAt: new Date(),
+                            refunds: [],
+                        },
+                    ],
+                },
+            ]);
+
             (jest.spyOn(prisma.paymentRecord, "findMany") as any).mockResolvedValue([
                 {
-                    id: "pay-rec-1",
-                    appointmentId: "appt-1",
+                    id: "00000000-0000-0000-0000-000000000301",
+                    appointmentId: "00000000-0000-0000-0000-000000000101",
                     amountCents: 25000,
                     currency: "USD",
                     status: "SUCCEEDED",
-                    paymentMethod: "Card",
+                    provider: "STRIPE",
+                    metadata: { paymentMethod: "Card" },
                     stripePaymentIntentId: "pi_test123",
                     createdAt: new Date(),
                     appointment: {
-                        id: "appt-1",
+                        id: "00000000-0000-0000-0000-000000000101",
                         service: { name: "Signature Balayage", priceCents: 25000 },
                         staff: { displayName: "Senior Colorist" },
+                        location: { name: "Downtown Studio" },
                         startAt: new Date(),
                         endAt: new Date(),
                     },

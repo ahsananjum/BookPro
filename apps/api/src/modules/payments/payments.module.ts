@@ -16,6 +16,8 @@ import { ExchangeRateService } from "./exchange-rate.service";
 import { STRIPE_CONNECT_PROVIDER } from "./stripe-connect-provider.interface";
 import { PAYMENT_PROVIDER } from "./payment-provider.interface";
 
+import { RealtimeModule } from "../realtime/realtime.module";
+
 @Module({
     imports: [
         DatabaseModule,
@@ -24,6 +26,7 @@ import { PAYMENT_PROVIDER } from "./payment-provider.interface";
         AvailabilityModule,
         OrganizationModule,
         CommonModule,
+        RealtimeModule,
     ],
     controllers: [PaymentsController, OrganizationPaymentsController, StripeConnectController],
     providers: [

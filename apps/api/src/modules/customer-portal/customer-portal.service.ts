@@ -13,6 +13,7 @@ import { EncryptionService } from "@bookpro/server-core";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../database/prisma.service";
 import { OutboxService } from "../outbox/outbox.service";
+import { ExchangeRateService } from "../payments/exchange-rate.service";
 
 @Injectable()
 export class CustomerPortalService {
@@ -21,6 +22,7 @@ export class CustomerPortalService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly outboxService?: OutboxService,
+    @Optional() private readonly exchangeRateService?: ExchangeRateService,
   ) {}
 
   /**
@@ -780,9 +782,35 @@ export class CustomerPortalService {
     });
 
     if (!customer) {
-      return { items: [], totalSpentCents: 0 };
+      return { items: [], transactions: [], totalSpentCents: 0, summary: { totalSpentCents: 0, totalRefundedCents: 0, netPaidCents: 0, totalAppointments: 0 } };
     }
 
+    const org = await this.prisma.organization.findUnique({
+      where: { id: ctx.organizationId },
+      select: { id: true, name: true, brandName: true, slug: true, currency: true, logoUrl: true, timezone: true },
+    });
+
+    const orgCurrency = (org?.currency || "USD").toUpperCase();
+    const fxService = this.exchangeRateService || new ExchangeRateService();
+
+    // 1. Fetch all customer appointments
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        organizationId: ctx.organizationId,
+        customerId: customer.id,
+      },
+      include: {
+        service: true,
+        staff: true,
+        location: true,
+        paymentRecords: {
+          include: { refunds: { orderBy: { createdAt: "desc" } } },
+        },
+      },
+      orderBy: { startAt: "desc" },
+    });
+
+    // 2. Fetch all payment records for this customer
     const payments = await this.prisma.paymentRecord.findMany({
       where: {
         organizationId: ctx.organizationId,
@@ -813,24 +841,151 @@ export class CustomerPortalService {
       orderBy: { createdAt: "desc" },
     });
 
-    const org = await this.prisma.organization.findUnique({
-      where: { id: ctx.organizationId },
-      select: { id: true, name: true, brandName: true, slug: true, currency: true, logoUrl: true },
-    });
+    const enrichedTransactions: any[] = [];
+    let totalPaidInOrgCents = 0;
+    let totalRefundedInOrgCents = 0;
 
-    const totalRefundedCents = payments.reduce((acc, p) => {
-      const pRefunds = (p.refunds || []).reduce((rAcc: number, r: any) => rAcc + (r.amountCents || 0), 0);
-      return acc + pRefunds;
-    }, 0);
+    // Process recorded gateway/card payments
+    for (const p of payments) {
+      const meta = (p.metadata as any) || {};
+      const payCurrency = (p.currency || "USD").toUpperCase();
+      let exchangeRate = 1.0;
+      let paidInOrgCents = p.amountCents;
 
-    const grossSpentCents = customer.totalSpentCents || 0;
-    const netPaidCents = Math.max(0, grossSpentCents - totalRefundedCents);
+      if (payCurrency !== orgCurrency) {
+        if (meta.exchangeRate && typeof meta.exchangeRate === "number") {
+          exchangeRate = meta.exchangeRate;
+          paidInOrgCents = Math.round(p.amountCents * exchangeRate);
+        } else {
+          try {
+            const conv = await fxService.convertCurrency(p.amountCents, payCurrency, orgCurrency);
+            paidInOrgCents = conv.convertedAmountCents;
+            exchangeRate = conv.rate;
+          } catch {
+            paidInOrgCents = p.amountCents;
+            exchangeRate = 1.0;
+          }
+        }
+      }
+
+      // Compute refunds in org currency
+      let pRefundsOrgCents = 0;
+      const enrichedRefunds = (p.refunds || []).map((rf: any) => {
+        const rfCurrency = (rf.currency || payCurrency).toUpperCase();
+        let rfInOrg = rf.amountCents;
+        if (rfCurrency !== orgCurrency) {
+          rfInOrg = Math.round(rf.amountCents * exchangeRate);
+        }
+        pRefundsOrgCents += rfInOrg;
+        return {
+          ...rf,
+          amountInOrgCents: rfInOrg,
+          orgCurrency,
+        };
+      });
+
+      if (p.status === "SUCCEEDED" || p.status === "PARTIALLY_REFUNDED" || p.status === "REFUNDED") {
+        totalPaidInOrgCents += paidInOrgCents;
+        totalRefundedInOrgCents += pRefundsOrgCents;
+      }
+
+      const originalServicePriceCents = p.appointment?.priceCents || meta.originalAmountCents || paidInOrgCents;
+      const balanceDueCents = Math.max(0, originalServicePriceCents - (paidInOrgCents - pRefundsOrgCents));
+
+      enrichedTransactions.push({
+        id: p.id,
+        amountCents: p.amountCents,
+        currency: payCurrency,
+        originalAmountCents: originalServicePriceCents,
+        originalCurrency: orgCurrency,
+        paidInOrgCents,
+        balanceDueCents,
+        exchangeRate,
+        status: p.status,
+        paymentMethod: meta.paymentMethod || (p.provider === "STRIPE" ? "Credit / Debit Card" : p.provider) || "Credit / Debit Card",
+        stripePaymentIntentId: p.providerPaymentId,
+        createdAt: p.createdAt.toISOString(),
+        appointment: p.appointment ? {
+          id: p.appointment.id,
+          service: p.appointment.service ? {
+            id: p.appointment.service.id,
+            name: p.appointment.service.name,
+            priceCents: p.appointment.service.priceCents,
+            durationMin: p.appointment.service.durationMin,
+          } : undefined,
+          staff: p.appointment.staff ? { displayName: p.appointment.staff.displayName } : undefined,
+          location: p.appointment.location ? { name: p.appointment.location.name, address: p.appointment.location.address } : undefined,
+          startAt: p.appointment.startAt.toISOString(),
+          endAt: p.appointment.endAt.toISOString(),
+          priceCents: p.appointment.priceCents,
+          currency: p.appointment.currency || orgCurrency,
+          paymentStatus: p.appointment.paymentStatus,
+        } : undefined,
+        refunds: enrichedRefunds,
+      });
+    }
+
+    // 3. Synthesize transaction entries for confirmed appointments without payment records (e.g. Pay at Venue, Walk-ins)
+    const paidApptIds = new Set(payments.map((p) => p.appointmentId).filter(Boolean));
+    for (const appt of appointments) {
+      if (!paidApptIds.has(appt.id)) {
+        const isSettled = appt.paymentStatus === "PAID";
+        const apptPrice = appt.priceCents || 0;
+        if (isSettled) {
+          totalPaidInOrgCents += apptPrice;
+        }
+
+        enrichedTransactions.push({
+          id: `appt_${appt.id}`,
+          amountCents: isSettled ? apptPrice : 0,
+          currency: orgCurrency,
+          originalAmountCents: apptPrice,
+          originalCurrency: orgCurrency,
+          paidInOrgCents: isSettled ? apptPrice : 0,
+          balanceDueCents: isSettled ? 0 : apptPrice,
+          exchangeRate: 1.0,
+          status: isSettled ? "SUCCEEDED" : "PENDING",
+          paymentMethod: isSettled ? "Front Desk / Settled" : "Pay at Studio",
+          createdAt: appt.createdAt.toISOString(),
+          appointment: {
+            id: appt.id,
+            service: appt.service ? {
+              id: appt.service.id,
+              name: appt.service.name,
+              priceCents: appt.service.priceCents,
+              durationMin: appt.service.durationMin,
+            } : undefined,
+            staff: appt.staff ? { displayName: appt.staff.displayName } : undefined,
+            location: appt.location ? { name: appt.location.name, address: appt.location.address } : undefined,
+            startAt: appt.startAt.toISOString(),
+            endAt: appt.endAt.toISOString(),
+            priceCents: apptPrice,
+            currency: appt.currency || orgCurrency,
+            paymentStatus: appt.paymentStatus,
+          },
+          refunds: [],
+        });
+      }
+    }
+
+    // Sort all transactions newest first
+    enrichedTransactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const netPaidCents = Math.max(0, totalPaidInOrgCents - totalRefundedInOrgCents);
+
+    // Opportunistically persist authoritative customer total spent if outdated
+    if ((customer.totalSpentCents || 0) < netPaidCents) {
+      this.prisma.customer.update({
+        where: { id: customer.id },
+        data: { totalSpentCents: netPaidCents },
+      }).catch((err: any) => this.logger.warn(`Failed to sync totalSpentCents: ${err.message}`));
+    }
 
     const summary = {
-      totalSpentCents: grossSpentCents,
-      totalRefundedCents,
+      totalSpentCents: netPaidCents,
+      totalRefundedCents: totalRefundedInOrgCents,
       netPaidCents,
-      totalAppointments: payments.length,
+      totalAppointments: appointments.length,
     };
 
     return {
@@ -839,19 +994,19 @@ export class CustomerPortalService {
         fullName: customer.fullName,
         email: customer.email,
         phone: customer.phone,
-        totalSpentCents: customer.totalSpentCents,
-        currency: org?.currency || "USD",
+        totalSpentCents: netPaidCents,
+        currency: orgCurrency,
       },
       organization: org || {
         id: ctx.organizationId,
         name: "Studio",
         brandName: "Studio",
         slug: "studio",
-        currency: "USD",
+        currency: orgCurrency,
       },
-      items: payments,
-      transactions: payments,
-      totalSpentCents: customer.totalSpentCents,
+      items: enrichedTransactions,
+      transactions: enrichedTransactions,
+      totalSpentCents: netPaidCents,
       summary,
     };
   }

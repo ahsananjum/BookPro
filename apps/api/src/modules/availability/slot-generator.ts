@@ -26,13 +26,26 @@ export class SlotGenerator {
             let candidateStart = availInt.start;
 
             while (candidateStart.addMinutes(serviceDurationMin).isBeforeOrEqual(availInt.end)) {
-                const occupiedStart = candidateStart.addMinutes(-preBufferMin);
-                const occupiedEnd = candidateStart.addMinutes(serviceDurationMin + postBufferMin);
-                const candidateOccupiedInt = new TimeInterval(occupiedStart, occupiedEnd);
+                const serviceEnd = candidateStart.addMinutes(serviceDurationMin);
 
-                const isFullyAvailable =
-                    availInt.start.isBeforeOrEqual(candidateOccupiedInt.start) &&
-                    availInt.end.isAfterOrEqual(candidateOccupiedInt.end);
+                // Service itself must fit within the available interval
+                const fitsService =
+                    availInt.start.isBeforeOrEqual(candidateStart) &&
+                    availInt.end.isAfterOrEqual(serviceEnd);
+
+                // Buffer checks: Pre-buffer only constrains if preceded by busy time within shift (not at shift start)
+                const preBufferOk =
+                    preBufferMin === 0 ||
+                    availInt.start.equals(candidateStart) ||
+                    availInt.start.isBeforeOrEqual(candidateStart.addMinutes(-preBufferMin));
+
+                // Post-buffer check: Post-buffer only constrains if followed by busy time within shift (not at shift end)
+                const postBufferOk =
+                    postBufferMin === 0 ||
+                    availInt.end.equals(serviceEnd) ||
+                    availInt.end.isAfterOrEqual(candidateStart.addMinutes(serviceDurationMin + postBufferMin));
+
+                const isFullyAvailable = fitsService && preBufferOk && postBufferOk;
 
                 const isFuture = candidateStart.toDate().getTime() > Date.now();
                 const meetsPolicy =

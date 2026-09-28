@@ -442,7 +442,17 @@ export class AppointmentService {
             },
         );
 
-        await this.outboxService.drainImmediate();
+        await this.outboxService?.drainImmediate?.();
+
+        if (this.realtimeService && res.data) {
+            await this.realtimeService.broadcastEvent({
+                organizationId: res.data.organizationId,
+                type: 'appointment.created',
+                entityId: res.data.id,
+                timestamp: new Date().toISOString(),
+            });
+        }
+
         return res.data;
     }
 
@@ -782,7 +792,7 @@ export class AppointmentService {
             }
         }
 
-        await this.outboxService.drainImmediate();
+        await this.outboxService?.drainImmediate?.();
         return updated;
     }
 
@@ -902,7 +912,7 @@ export class AppointmentService {
             });
         }
 
-        await this.outboxService.drainImmediate();
+        await this.outboxService?.drainImmediate?.();
         return res.data;
     }
 
@@ -1372,7 +1382,7 @@ export class AppointmentService {
                 });
             }
 
-            await this.outboxService.drainImmediate();
+            await this.outboxService?.drainImmediate?.();
             return updated;
         } catch (txError: any) {
             this.logger.error(
@@ -1413,6 +1423,97 @@ export class AppointmentService {
     }
 
     /**
+     * Opportunistically progresses appointments whose scheduled start or end times have arrived.
+     * Ensures calendar and dashboard always show live, up-to-date statuses without relying solely on cron.
+     */
+    async autoProgressOrgAppointments(organizationId: string): Promise<void> {
+        try {
+            const now = new Date();
+
+            // 1. CONFIRMED or CHECKED_IN whose startAt <= now and endAt > now -> IN_PROGRESS
+            const toStart = await this.prisma.appointment.findMany({
+                where: {
+                    organizationId,
+                    status: { in: ['CONFIRMED', 'CHECKED_IN'] },
+                    startAt: { lte: now },
+                    endAt: { gt: now },
+                },
+                select: { id: true, status: true },
+            });
+
+            for (const appt of toStart) {
+                await this.prisma.$transaction(async (tx) => {
+                    await tx.appointment.update({
+                        where: { id: appt.id },
+                        data: { status: 'IN_PROGRESS' },
+                    });
+                    await tx.appointmentHistory.create({
+                        data: {
+                            appointmentId: appt.id,
+                            actorType: 'SYSTEM',
+                            actorId: 'AUTO_LIFECYCLE',
+                            action: 'STATUS_CHANGE',
+                            fromStatus: appt.status,
+                            toStatus: 'IN_PROGRESS',
+                            changes: { reason: 'Automatic start at scheduled appointment time' },
+                        },
+                    });
+                });
+
+                if (this.realtimeService) {
+                    await this.realtimeService.broadcastEvent({
+                        organizationId,
+                        type: 'appointment.status_changed',
+                        entityId: appt.id,
+                        timestamp: new Date().toISOString(),
+                    });
+                }
+            }
+
+            // 2. Any active appointment (IN_PROGRESS, CONFIRMED, CHECKED_IN) whose endAt <= now -> COMPLETED
+            const toComplete = await this.prisma.appointment.findMany({
+                where: {
+                    organizationId,
+                    status: { in: ['IN_PROGRESS', 'CONFIRMED', 'CHECKED_IN'] },
+                    endAt: { lte: now },
+                },
+                select: { id: true, status: true },
+            });
+
+            for (const appt of toComplete) {
+                await this.prisma.$transaction(async (tx) => {
+                    await tx.appointment.update({
+                        where: { id: appt.id },
+                        data: { status: 'COMPLETED' },
+                    });
+                    await tx.appointmentHistory.create({
+                        data: {
+                            appointmentId: appt.id,
+                            actorType: 'SYSTEM',
+                            actorId: 'AUTO_LIFECYCLE',
+                            action: 'STATUS_CHANGE',
+                            fromStatus: appt.status,
+                            toStatus: 'COMPLETED',
+                            changes: { reason: 'Automatic completion at scheduled end time' },
+                        },
+                    });
+                });
+
+                if (this.realtimeService) {
+                    await this.realtimeService.broadcastEvent({
+                        organizationId,
+                        type: 'appointment.status_changed',
+                        entityId: appt.id,
+                        timestamp: new Date().toISOString(),
+                    });
+                }
+            }
+        } catch (err: any) {
+            this.logger.warn(`autoProgressOrgAppointments failed for org ${organizationId}: ${err.message}`);
+        }
+    }
+
+    /**
      * Queries appointments for calendar & lists (PRD §23)
      */
     async getAppointments(filter: QueryAppointmentsFilter): Promise<Appointment[]> {
@@ -1426,6 +1527,11 @@ export class AppointmentService {
             startDate,
             endDate,
         } = filter;
+
+        // Opportunistic auto-lifecycle progression
+        if (organizationId) {
+            await this.autoProgressOrgAppointments(organizationId);
+        }
 
         return this.prisma.appointment.findMany({
             where: {
@@ -1595,7 +1701,7 @@ export class AppointmentService {
             }).catch(() => null);
         }
 
-        await this.outboxService.drainImmediate();
+        await this.outboxService?.drainImmediate?.();
         return updated;
     }
 

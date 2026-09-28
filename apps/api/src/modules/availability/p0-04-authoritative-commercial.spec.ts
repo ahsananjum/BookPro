@@ -159,6 +159,7 @@ describe("P0-04 Authoritative Availability & Commercial Terms Suite", () => {
     };
 
     beforeEach(async () => {
+        jest.useFakeTimers().setSystemTime(new Date("2026-09-07T08:00:00.000Z"));
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 AuthoritativeAvailabilityValidatorService,
@@ -190,6 +191,10 @@ describe("P0-04 Authoritative Availability & Commercial Terms Suite", () => {
 
         authoritativeValidator = module.get<AuthoritativeAvailabilityValidatorService>(AuthoritativeAvailabilityValidatorService);
         availabilityService = module.get<AvailabilityService>(AvailabilityService);
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
     });
 
     describe("1. No Operating Hours Fallback Elimination", () => {

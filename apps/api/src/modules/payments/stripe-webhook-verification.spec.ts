@@ -319,9 +319,13 @@ describe("Stripe Fail-Closed Configuration & Strict Webhook Verification", () =>
 
 
             const mockOutbox: any = {
+                emit: async (event: any) => {
+                    outboxEvents.push(event);
+                },
                 emitInTx: async (_tx: any, event: any) => {
                     outboxEvents.push(event);
                 },
+                drainImmediate: async () => {},
             };
 
             const mockScheduleGuard: any = {

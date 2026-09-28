@@ -81,6 +81,9 @@ describe('StaffService Authoritative Unit Suite', () => {
                 create: jest.fn().mockResolvedValue({ id: 'leave-1', status: 'APPROVED' }),
                 deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
+            appointment: {
+                findMany: jest.fn().mockResolvedValue([]),
+            },
         };
 
         realtime = {
@@ -220,7 +223,7 @@ describe('StaffService Authoritative Unit Suite', () => {
         expect(prisma.staffLeave.deleteMany).toHaveBeenCalledWith({
             where: { id: 'leave-1', organizationId: orgId, staffId },
         });
-        expect(realtime.broadcastEvent).toHaveBeenCalledTimes(2);
+        expect(realtime.broadcastEvent).toHaveBeenCalledTimes(4);
     });
 
     it('should archive staff member and broadcast update', async () => {

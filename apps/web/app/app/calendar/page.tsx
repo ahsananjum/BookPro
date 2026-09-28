@@ -453,6 +453,15 @@ export default function BusinessCalendarPage() {
     fetchAppointments();
   }, [fetchAppointments]);
 
+  // Self-healing periodic synchronization (every 20 seconds) for live calendar state
+  useEffect(() => {
+    if (!orgId) return;
+    const interval = setInterval(() => {
+      fetchAppointments();
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [orgId, fetchAppointments]);
+
   // Load CRM Customers for walk-in/manual modal
   useEffect(() => {
     if (!orgId || !isNewModalOpen) return;

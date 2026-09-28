@@ -127,6 +127,30 @@ export class DashboardOverviewService {
         locationIdFilter?: string,
         currencyOverride?: string
     ): Promise<DashboardOverviewResponseDto> {
+        // Opportunistic lifecycle progression for the organization
+        try {
+            const now = new Date();
+            await this.prisma.appointment.updateMany({
+                where: {
+                    organizationId,
+                    status: { in: ["CONFIRMED", "CHECKED_IN"] },
+                    startAt: { lte: now },
+                    endAt: { gt: now },
+                },
+                data: { status: "IN_PROGRESS" },
+            });
+            await this.prisma.appointment.updateMany({
+                where: {
+                    organizationId,
+                    status: { in: ["IN_PROGRESS", "CONFIRMED", "CHECKED_IN"] },
+                    endAt: { lte: now },
+                },
+                data: { status: "COMPLETED" },
+            });
+        } catch {
+            // Non-blocking opportunistic progression
+        }
+
         // 1. Fetch organization details
         const org = await this.prisma.organization.findUnique({
             where: { id: organizationId },

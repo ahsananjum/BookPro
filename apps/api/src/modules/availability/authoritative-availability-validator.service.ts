@@ -4,10 +4,12 @@ import {
     NotFoundException,
     ConflictException,
     BadRequestException,
+    Optional,
 } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import { ScheduleGuardService, GuardKey } from "../concurrency/schedule-guard.service";
 import { OutboxService } from "../outbox/outbox.service";
+import { RealtimeService } from "../realtime/realtime.service";
 import { PolicyResolver } from "./policy-resolver";
 import { DurationCalculator } from "./duration-calculator";
 import { EffectiveOperatingWindowBuilder } from "./effective-operating-window-builder";
@@ -128,6 +130,7 @@ export class AuthoritativeAvailabilityValidatorService {
         private readonly staffAvailabilityBuilder: StaffAvailabilityBuilder,
         private readonly resourceService: ResourceAvailabilityService,
         private readonly capacityService: CapacityAvailabilityService,
+        @Optional() private readonly realtimeService?: RealtimeService,
     ) { }
 
     private intervalEncloses(parent: TimeInterval, child: TimeInterval): boolean {
@@ -250,7 +253,7 @@ export class AuthoritativeAvailabilityValidatorService {
             location.locationHolidays || [],
         );
 
-        const fallsWithinOperatingHours = opWindows.some((w) => this.intervalEncloses(w, occupiedInterval));
+        const fallsWithinOperatingHours = opWindows.some((w) => this.intervalEncloses(w, serviceInterval));
         if (!fallsWithinOperatingHours) {
             if (opWindows.length === 0) {
                 throw new ConflictException({
@@ -289,7 +292,7 @@ export class AuthoritativeAvailabilityValidatorService {
                     locationId,
                 );
 
-                const isWithinStaffWorking = workingIntervals.some((wi) => this.intervalEncloses(wi, occupiedInterval));
+                const isWithinStaffWorking = workingIntervals.some((wi) => this.intervalEncloses(wi, serviceInterval));
                 if (!isWithinStaffWorking) {
                     throw new ConflictException({
                         code: "STAFF_UNAVAILABLE",
@@ -556,7 +559,14 @@ export class AuthoritativeAvailabilityValidatorService {
             // One active appointment per customer per organization-local calendar day.
             if (customerId && targetType === "APPOINTMENT") {
                 const existingDailyBooking = await tx.appointment.findFirst({
-                    where: { organizationId, customerId, bookingDate, status: { notIn: ["CANCELLED", "NO_SHOW"] }, ...(rescheduleAppointmentId ? { id: { not: rescheduleAppointmentId } } : {}) },
+                    where: {
+                        organizationId,
+                        customerId,
+                        bookingDate,
+                        status: { notIn: ["CANCELLED", "NO_SHOW"] },
+                        ...(rescheduleAppointmentId ? { id: { not: rescheduleAppointmentId } } : {}),
+                        ...(appointmentDetails?.bookingHoldId ? { bookingHoldId: { not: appointmentDetails.bookingHoldId } } : {}),
+                    },
                     select: { id: true },
                 });
                 if (existingDailyBooking) throw new ConflictException({ code: "CUSTOMER_DAILY_LIMIT", message: "A customer can book only one appointment per day." });
@@ -711,7 +721,7 @@ export class AuthoritativeAvailabilityValidatorService {
                     location.locationHolidays || [],
                 );
 
-                const fitsOpWindow = opWindows.some((w) => this.intervalEncloses(w, occupiedInterval));
+                const fitsOpWindow = opWindows.some((w) => this.intervalEncloses(w, serviceInterval));
                 if (!fitsOpWindow) {
                     if (opWindows.length === 0) {
                         throw new ConflictException({
@@ -743,7 +753,7 @@ export class AuthoritativeAvailabilityValidatorService {
                         locationId,
                     );
 
-                    const isWorking = workingIntervals.some((wi) => this.intervalEncloses(wi, occupiedInterval));
+                    const isWorking = workingIntervals.some((wi) => this.intervalEncloses(wi, serviceInterval));
                     if (!isWorking) {
                         throw new ConflictException({
                             code: "STAFF_UNAVAILABLE",
@@ -1193,9 +1203,28 @@ export class AuthoritativeAvailabilityValidatorService {
             };
         };
 
-        if (existingTx) {
-            return execute(existingTx);
+        const result = existingTx
+            ? await execute(existingTx)
+            : await this.prisma.$transaction(execute, { timeout: 15000 });
+
+        if (this.realtimeService) {
+            if (result.appointment) {
+                await this.realtimeService.broadcastEvent({
+                    organizationId: result.appointment.organizationId,
+                    type: "appointment.created",
+                    entityId: result.appointment.id,
+                    timestamp: new Date().toISOString(),
+                });
+            } else if (result.bookingHold) {
+                await this.realtimeService.broadcastEvent({
+                    organizationId: result.bookingHold.organizationId,
+                    type: "booking_hold.created",
+                    entityId: result.bookingHold.id,
+                    timestamp: new Date().toISOString(),
+                });
+            }
         }
-        return this.prisma.$transaction(execute, { timeout: 15000 });
+
+        return result;
     }
 }

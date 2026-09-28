@@ -110,7 +110,7 @@ describe("P0-03 Authoritative Availability Validator Comprehensive Suite", () =>
         },
         customer: {
             findFirst: jest.fn().mockImplementation(({ where }) => {
-                if (where.organizationId === orgId && where.id === customerId) return Promise.resolve(mockCustomer);
+                if (where.organizationId === orgId && (where.id === customerId || where.id === "cust-reschedule-2")) return Promise.resolve(mockCustomer);
                 return Promise.resolve(null);
             }),
         },
@@ -141,11 +141,14 @@ describe("P0-03 Authoritative Availability Validator Comprehensive Suite", () =>
                         if (where.id.not && a.id === where.id.not) return false;
                     }
                     if (where.organizationId && a.organizationId !== where.organizationId) return false;
+                    if (where.customerId && a.customerId !== where.customerId) return false;
+                    if (where.bookingDate && a.bookingDate !== where.bookingDate) return false;
                     if (where.bookingHoldId) {
                         if (typeof where.bookingHoldId === "string" && a.bookingHoldId !== where.bookingHoldId) return false;
                         if (where.bookingHoldId.not && a.bookingHoldId === where.bookingHoldId.not) return false;
                     }
                     if (where.status?.in && !where.status.in.includes(a.status)) return false;
+                    if (where.status?.notIn && where.status.notIn.includes(a.status)) return false;
                     if (where.staffId && a.staffId !== where.staffId) return false;
                     if (where.startAt && where.endAt) {
                         const apptStart = new Date(a.startAt).getTime();
@@ -193,9 +196,24 @@ describe("P0-03 Authoritative Availability Validator Comprehensive Suite", () =>
         bookingHold: {
             findFirst: jest.fn().mockImplementation(({ where }) => {
                 const found = mockBookingHolds.find((h) => {
-                    if (where.id && h.id !== where.id) return false;
+                    if (where.id) {
+                        if (typeof where.id === "string" && h.id !== where.id) return false;
+                        if (where.id.not && h.id === where.id.not) return false;
+                    }
                     if (where.organizationId && h.organizationId !== where.organizationId) return false;
-                    if (where.status && h.status !== where.status) return false;
+                    if (where.status) {
+                        if (typeof where.status === "string" && h.status !== where.status) return false;
+                        if (where.status.in && !where.status.in.includes(h.status)) return false;
+                    }
+                    if (where.expiresAt?.gt && new Date(h.expiresAt) <= where.expiresAt.gt) return false;
+                    if (where.staffId && h.staffId !== where.staffId) return false;
+                    if (where.startAt && where.endAt) {
+                        const holdStart = new Date(h.startAt).getTime();
+                        const holdEnd = new Date(h.endAt).getTime();
+                        const checkStart = new Date(where.endAt.gt).getTime();
+                        const checkEnd = new Date(where.startAt.lt).getTime();
+                        return holdStart < checkEnd && holdEnd > checkStart;
+                    }
                     return true;
                 });
                 return Promise.resolve(found || null);
@@ -277,6 +295,7 @@ describe("P0-03 Authoritative Availability Validator Comprehensive Suite", () =>
     };
 
     beforeEach(async () => {
+        jest.useFakeTimers().setSystemTime(new Date("2026-09-07T08:00:00.000Z"));
         mockAppointments = [];
         mockBookingHolds = [];
         mockAuditLogs = [];
@@ -301,6 +320,10 @@ describe("P0-03 Authoritative Availability Validator Comprehensive Suite", () =>
         service = module.get<AuthoritativeAvailabilityValidatorService>(
             AuthoritativeAvailabilityValidatorService,
         );
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
     });
 
     describe("1. Search & Read Validation Parity", () => {
@@ -599,7 +622,7 @@ describe("P0-03 Authoritative Availability Validator Comprehensive Suite", () =>
                 locationId: locId,
                 serviceId: serviceId,
                 staffId: staffId,
-                customerId: customerId,
+                customerId: "cust-reschedule-2",
                 startAt: "2026-09-07T11:00:00.000Z",
                 targetType: "APPOINTMENT",
             });
@@ -611,7 +634,7 @@ describe("P0-03 Authoritative Availability Validator Comprehensive Suite", () =>
                     locationId: locId,
                     serviceId: serviceId,
                     staffId: staffId,
-                    customerId: customerId,
+                    customerId: "cust-reschedule-2",
                     startAt: validStartIso,
                     targetType: "APPOINTMENT",
                     rescheduleAppointmentId: apptB.appointment!.id,

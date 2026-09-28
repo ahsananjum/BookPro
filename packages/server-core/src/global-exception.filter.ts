@@ -62,7 +62,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
             : (typeof responseBody === "object" && responseBody !== null && typeof (responseBody as any).message === "string")
             ? (responseBody as any).message
             : undefined;
-        const detail = (status < 500 && rawMessage) ? rawMessage : publicError.detail;
+        const isSensitiveOrProvider = typeof rawMessage === "string" && /provider|sk_live|sk_test|whsec|secret|password|bearer/i.test(rawMessage);
+        const detail = (status < 500 && rawMessage && !isSensitiveOrProvider) ? rawMessage : publicError.detail;
 
         const problem: ApiProblem = {
             type: `https://api.bookpro.local/problems/${code.toLowerCase().replace(/_/g, "-")}`,

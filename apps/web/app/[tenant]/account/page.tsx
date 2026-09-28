@@ -69,6 +69,7 @@ interface CustomerAppointment {
   startAt: string;
   endAt: string;
   status: string;
+  paymentStatus?: string;
   priceCents: number;
   currency: string;
   serviceId?: string;
@@ -95,23 +96,33 @@ interface CustomerAppointment {
 
 interface CustomerBillingTransaction {
   id: string;
-  appointmentId: string;
+  appointmentId?: string;
   amountCents: number;
   currency: string;
+  originalAmountCents?: number;
+  originalCurrency?: string;
+  paidInOrgCents?: number;
+  balanceDueCents?: number;
+  exchangeRate?: number;
   status: string;
   paymentMethod: string;
   stripePaymentIntentId?: string;
   createdAt: string;
   appointment?: {
     id: string;
-    service?: { name: string; priceCents?: number };
+    service?: { name: string; priceCents?: number; durationMin?: number };
     staff?: { displayName: string };
+    location?: { name: string; address?: string };
     startAt: string;
     endAt: string;
+    priceCents?: number;
+    currency?: string;
+    paymentStatus?: string;
   };
   refunds?: Array<{
     id: string;
     amountCents: number;
+    amountInOrgCents?: number;
     status: string;
     reason?: string;
     createdAt: string;
@@ -154,6 +165,7 @@ interface OrganizationInfo {
   logoUrl?: string | null;
   primaryColor?: string | null;
   timezone?: string | null;
+  currency?: string | null;
 }
 
 function formatMoney(cents: number, currency: string = "USD"): string {
@@ -233,6 +245,11 @@ function CustomerAccountContent() {
     endAt?: string;
     priceCents?: number;
     currency?: string;
+    paidInOrgCents?: number;
+    balanceDueCents?: number;
+    gatewayAmountCents?: number;
+    gatewayCurrency?: string;
+    exchangeRate?: number;
     paymentRecords?: any[];
     status?: string;
     invoiceNumber?: string;
@@ -730,6 +747,12 @@ function CustomerAccountContent() {
   };
 
   const handleOpenInvoiceFromAppointment = (appt: CustomerAppointment) => {
+    const orgCurrency = organization?.currency || appt.currency || "USD";
+    const payment = appt.paymentRecords?.[0];
+    const isPaid = appt.paymentStatus === "PAID";
+    const depositPaid = isPaid ? appt.priceCents : (payment?.amountCents || 0);
+    const balanceDue = isPaid ? 0 : Math.max(0, appt.priceCents - depositPaid);
+
     setSelectedInvoiceItem({
       id: appt.id,
       serviceName: appt.service?.name || "Service Appointment",
@@ -737,24 +760,39 @@ function CustomerAccountContent() {
       startAt: appt.startAt,
       endAt: appt.endAt,
       priceCents: appt.priceCents,
-      currency: appt.currency,
+      currency: appt.currency || orgCurrency,
+      paidInOrgCents: depositPaid,
+      balanceDueCents: balanceDue,
+      gatewayAmountCents: payment?.amountCents,
+      gatewayCurrency: payment?.currency || appt.currency || orgCurrency,
+      exchangeRate: 1.0,
       paymentRecords: appt.paymentRecords || [],
       status: appt.status,
       invoiceNumber: `INV-${appt.id.slice(0, 8).toUpperCase()}`,
-      paymentMethod: appt.paymentRecords?.[0]?.paymentMethod || "Card on File",
-      transactionId: appt.paymentRecords?.[0]?.stripePaymentIntentId || appt.paymentRecords?.[0]?.id || appt.id,
+      paymentMethod: payment?.paymentMethod || (isPaid ? "Settled at Studio" : "Pay at Venue"),
+      transactionId: payment?.stripePaymentIntentId || payment?.id || appt.id,
     });
   };
 
   const handleOpenInvoiceFromBilling = (tx: CustomerBillingTransaction) => {
+    const orgCurrency = tx.originalCurrency || organization?.currency || "USD";
+    const originalServicePrice = tx.originalAmountCents || tx.appointment?.priceCents || tx.amountCents;
+    const paidInOrg = tx.paidInOrgCents != null ? tx.paidInOrgCents : tx.amountCents;
+    const balanceDue = tx.balanceDueCents != null ? tx.balanceDueCents : Math.max(0, originalServicePrice - paidInOrg);
+
     setSelectedInvoiceItem({
       id: tx.id,
       serviceName: tx.appointment?.service?.name || "Billed Service",
       staffName: tx.appointment?.staff?.displayName || "Staff Member",
       startAt: tx.appointment?.startAt || tx.createdAt,
       endAt: tx.appointment?.endAt || tx.createdAt,
-      priceCents: tx.amountCents,
-      currency: tx.currency,
+      priceCents: originalServicePrice,
+      currency: orgCurrency,
+      paidInOrgCents: paidInOrg,
+      balanceDueCents: balanceDue,
+      gatewayAmountCents: tx.amountCents,
+      gatewayCurrency: tx.currency,
+      exchangeRate: tx.exchangeRate || 1.0,
       paymentRecords: [
         {
           id: tx.id,
@@ -769,7 +807,7 @@ function CustomerAccountContent() {
       ],
       status: tx.status,
       invoiceNumber: `INV-${tx.id.slice(0, 8).toUpperCase()}`,
-      paymentMethod: tx.paymentMethod,
+      paymentMethod: tx.paymentMethod || "Credit / Debit Card",
       transactionId: tx.stripePaymentIntentId || tx.id,
     });
   };
@@ -1680,7 +1718,22 @@ function CustomerAccountContent() {
                                 {tx.paymentMethod || "Card"}
                               </td>
                               <td style={{ padding: "12px 14px", fontWeight: 700, color: "#f8fafc" }}>
-                                <div>{formatMoney(tx.amountCents, tx.currency)}</div>
+                                <div>
+                                  {formatMoney(
+                                    tx.paidInOrgCents || tx.originalAmountCents || tx.amountCents,
+                                    tx.originalCurrency || tx.currency
+                                  )}
+                                </div>
+                                {tx.originalCurrency && tx.currency !== tx.originalCurrency && (
+                                  <div style={{ fontSize: "11px", color: "#38bdf8" }}>
+                                    Gateway: {formatMoney(tx.amountCents, tx.currency)}
+                                  </div>
+                                )}
+                                {tx.balanceDueCents != null && tx.balanceDueCents > 0 && (
+                                  <div style={{ fontSize: "11px", color: "#f59e0b" }}>
+                                    Due at venue: {formatMoney(tx.balanceDueCents, tx.originalCurrency || tx.currency)}
+                                  </div>
+                                )}
                                 {totalRefunded > 0 && (
                                   <div style={{ fontSize: "11px", color: "#f87171" }}>
                                     -{formatMoney(totalRefunded, tx.currency)} ref.
@@ -1692,6 +1745,8 @@ function CustomerAccountContent() {
                                   <GlassBadge variant="danger" size="sm">REFUNDED</GlassBadge>
                                 ) : isPartialRefund ? (
                                   <GlassBadge variant="warning" size="sm">PARTIAL REFUND</GlassBadge>
+                                ) : tx.status === "PENDING" ? (
+                                  <GlassBadge variant="warning" size="sm">DUE AT VENUE</GlassBadge>
                                 ) : (
                                   <GlassBadge variant="success" size="sm">PAID</GlassBadge>
                                 )}
@@ -3097,19 +3152,59 @@ function CustomerAccountContent() {
                     );
                   })()}
 
+                  {/* Forex Conversion Banner if Gateway Currency differs from Studio Currency */}
+                  {selectedInvoiceItem.gatewayCurrency &&
+                    selectedInvoiceItem.currency &&
+                    selectedInvoiceItem.gatewayCurrency !== selectedInvoiceItem.currency && (
+                      <div
+                        style={{
+                          marginBottom: "20px",
+                          padding: "10px 14px",
+                          borderRadius: "8px",
+                          backgroundColor: "rgba(56, 189, 248, 0.08)",
+                          border: "1px solid rgba(56, 189, 248, 0.2)",
+                          fontSize: "12px",
+                          color: "#38bdf8",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <CheckCircle2 size={16} />
+                        <span>
+                          <strong>Forex Rate Conversion:</strong> Paid{" "}
+                          <strong>{formatMoney(selectedInvoiceItem.gatewayAmountCents || 0, selectedInvoiceItem.gatewayCurrency)}</strong> via online payment gateway. Converted at live rate (1 {selectedInvoiceItem.gatewayCurrency} ≈ {(selectedInvoiceItem.exchangeRate || 1).toFixed(2)} {selectedInvoiceItem.currency}) to {formatMoney(selectedInvoiceItem.paidInOrgCents || 0, selectedInvoiceItem.currency)}.
+                        </span>
+                      </div>
+                    )}
+
                   {/* Summary Totals */}
                   {(() => {
                     const allRefunds = (selectedInvoiceItem.paymentRecords || []).flatMap((p: any) => p.refunds || []);
                     const totalRefunded = allRefunds.reduce((acc: number, r: any) => acc + (r.amountCents || 0), 0);
                     const gross = selectedInvoiceItem.priceCents || 0;
-                    const net = Math.max(0, gross - totalRefunded);
+                    const paid = selectedInvoiceItem.paidInOrgCents || 0;
+                    const balanceDue = selectedInvoiceItem.balanceDueCents || 0;
+                    const net = Math.max(0, paid - totalRefunded);
 
                     return (
-                      <div style={{ marginLeft: "auto", maxWidth: "260px", marginBottom: "28px" }}>
+                      <div style={{ marginLeft: "auto", maxWidth: "320px", marginBottom: "28px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#94a3b8", marginBottom: "6px" }}>
-                          <span>Gross Subtotal:</span>
+                          <span>Service Subtotal:</span>
                           <span style={{ color: "#f8fafc", fontWeight: 700 }}>{formatMoney(gross, selectedInvoiceItem.currency || "USD")}</span>
                         </div>
+                        {paid > 0 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#38bdf8", marginBottom: "6px" }}>
+                            <span>Deposit / Online Paid:</span>
+                            <span style={{ fontWeight: 700 }}>{formatMoney(paid, selectedInvoiceItem.currency || "USD")}</span>
+                          </div>
+                        )}
+                        {balanceDue > 0 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#f59e0b", marginBottom: "6px" }}>
+                            <span>Due at Studio / Venue:</span>
+                            <span style={{ fontWeight: 700 }}>{formatMoney(balanceDue, selectedInvoiceItem.currency || "USD")}</span>
+                          </div>
+                        )}
                         {totalRefunded > 0 && (
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#f87171", marginBottom: "6px" }}>
                             <span>Total Refunded:</span>
@@ -3118,7 +3213,7 @@ function CustomerAccountContent() {
                         )}
                         <div style={{ height: "1px", backgroundColor: "rgba(255, 255, 255, 0.1)", margin: "8px 0" }} />
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "16px", fontWeight: 850, color: "#f8fafc" }}>
-                          <span>Net Paid:</span>
+                          <span>Net Settled:</span>
                           <span style={{ color: "#34d399" }}>{formatMoney(net, selectedInvoiceItem.currency || "USD")}</span>
                         </div>
                       </div>

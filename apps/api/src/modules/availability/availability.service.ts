@@ -169,8 +169,11 @@ export class AvailabilityService {
                     if (workingIntervals.length === 0) continue;
 
                     // Step 10: Query Busy Intervals (Appointments, Holds, Blocks)
-                    const searchStart = Instant.fromDate(current);
-                    const searchEnd = searchStart.addMinutes(24 * 60);
+                    // Expand search window to safely enclose staff shift across timezones with 2h buffer
+                    const minWorkingEpoch = workingIntervals.reduce((min, i) => Math.min(min, i.start.toEpochMs()), workingIntervals[0].start.toEpochMs());
+                    const maxWorkingEpoch = workingIntervals.reduce((max, i) => Math.max(max, i.end.toEpochMs()), workingIntervals[0].end.toEpochMs());
+                    const searchStart = Instant.fromEpochMs(minWorkingEpoch).addMinutes(-120);
+                    const searchEnd = Instant.fromEpochMs(maxWorkingEpoch).addMinutes(120);
 
                     const busyIntervals = await this.busyRepo.fetchBusyIntervals(
                         organizationId,
@@ -185,10 +188,11 @@ export class AvailabilityService {
                     );
 
                     const availableStaffIntervals = TimeInterval.subtractSet(workingIntervals, busySubtrahends);
-                    // Dynamically set slot stepping to the registered service duration + buffers from database
-                    const stepMinutes = durationInfo.totalDurationMin > 0
-                        ? durationInfo.totalDurationMin
-                        : (service.durationMin || 30);
+                    // Flexible slot stepping: use 15m increments for short services (<=20m), or 30m for standard services
+                    // to prevent rigid 60m blocks from hiding valid start times (:30, etc.)
+                    const stepMinutes = durationInfo.totalDurationMin <= 20
+                        ? 15
+                        : Math.min(30, durationInfo.totalDurationMin > 0 ? durationInfo.totalDurationMin : 30);
 
                     // Step 11: Candidate Slot Generation
                     const candidateSlots = this.slotGenerator.generateCandidateSlots(

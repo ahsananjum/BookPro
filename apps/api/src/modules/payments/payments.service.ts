@@ -39,6 +39,7 @@ import { IdempotencyService } from "../common/idempotency.service";
 import * as crypto from "crypto";
 import { ExchangeRateService } from "./exchange-rate.service";
 import { organizationBookingDate } from "../appointments/booking-date.util";
+import { RealtimeService } from "../realtime/realtime.service";
 
 @Injectable()
 export class PaymentsService {
@@ -57,6 +58,8 @@ export class PaymentsService {
         @Optional()
         @Inject(STRIPE_CONNECT_PROVIDER)
         private readonly stripeConnectProvider?: StripeConnectProvider,
+        @Optional()
+        private readonly realtimeService?: RealtimeService,
     ) {
         if (!this.exchangeRateService) {
             this.exchangeRateService = new ExchangeRateService();
@@ -747,8 +750,33 @@ export class PaymentsService {
                         amountCents: payment.amountCents,
                     },
                 });
+
+                // Increment customer totalSpentCents in organization native currency
+                const appt = await tx.appointment.findUnique({
+                    where: { id: payment.appointmentId! },
+                    select: { customerId: true, priceCents: true },
+                });
+                if (appt?.customerId) {
+                    const meta = (payment.metadata as any) || {};
+                    const incrementCents = Number(meta.originalAmountCents || payment.amountCents || appt.priceCents || 0);
+                    if (incrementCents > 0) {
+                        await tx.customer.update({
+                            where: { id: appt.customerId },
+                            data: { totalSpentCents: { increment: incrementCents } },
+                        });
+                    }
+                }
             });
-            await this.outboxService.drainImmediate();
+            await this.outboxService?.drainImmediate?.();
+
+            if (this.realtimeService) {
+                await this.realtimeService.broadcastEvent({
+                    organizationId: payment.organizationId,
+                    type: "appointment.payment_succeeded",
+                    entityId: payment.appointmentId!,
+                    timestamp: new Date().toISOString(),
+                });
+            }
             return;
         }
 
@@ -761,6 +789,7 @@ export class PaymentsService {
             if (isHoldActive) {
                 // Happy Path: Hold is active -> Finalize Appointment in transaction
                 let conversionFailedDueToRace = false;
+                let createdAppointmentId: string | null = null;
 
                 await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
                     const bookingDate = organizationBookingDate(hold.startAt, hold.location?.timezone || payment.organization?.timezone || "UTC");
@@ -861,6 +890,7 @@ export class PaymentsService {
                             version: 1,
                         },
                     });
+                    createdAppointmentId = appt.id;
 
                     // Increment coupon usage count atomically with usage limit check
                     if (quote.appliedCouponCode) {
@@ -942,10 +972,30 @@ export class PaymentsService {
                             paymentStatus: appointmentPaymentStatus,
                         },
                     });
+
+                    // 8. Increment customer totalSpentCents in organization native currency
+                    if (customerId) {
+                        const meta = (payment.metadata as any) || {};
+                        const incrementCents = Number(meta.originalAmountCents || payment.amountCents || fullPriceCents || 0);
+                        if (incrementCents > 0) {
+                            await tx.customer.update({
+                                where: { id: customerId },
+                                data: { totalSpentCents: { increment: incrementCents } },
+                            });
+                        }
+                    }
                 });
 
                 if (!conversionFailedDueToRace) {
-                    await this.outboxService.drainImmediate();
+                    await this.outboxService?.drainImmediate?.();
+                    if (this.realtimeService && createdAppointmentId) {
+                        await this.realtimeService.broadcastEvent({
+                            organizationId: payment.organizationId,
+                            type: "appointment.created",
+                            entityId: createdAppointmentId,
+                            timestamp: new Date().toISOString(),
+                        });
+                    }
                     return;
                 }
             }
@@ -1054,21 +1104,36 @@ export class PaymentsService {
                     data: { status: "CONVERTED" },
                 });
 
-                await this.outboxService.emit({
-                    aggregateType: "Appointment",
-                    aggregateId: appt.id,
-                    eventType: "appointment.confirmed",
-                    payload: {
-                        appointmentId: appt.id,
-                        organizationId: appt.organizationId,
-                        paymentRecordId: payment.id,
-                        amountCents: payment.amountCents,
-                        paymentStatus: appointmentPaymentStatus,
-                    },
-                });
+                if (this.outboxService?.emit) {
+                    await this.outboxService.emit({
+                        aggregateType: "Appointment",
+                        aggregateId: appt.id,
+                        eventType: "appointment.confirmed",
+                        payload: {
+                            appointmentId: appt.id,
+                            organizationId: appt.organizationId,
+                            paymentRecordId: payment.id,
+                            amountCents: payment.amountCents,
+                            paymentStatus: appointmentPaymentStatus,
+                        },
+                    });
+                } else if (this.outboxService?.emitInTx) {
+                    await this.outboxService.emitInTx(this.prisma, {
+                        aggregateType: "Appointment",
+                        aggregateId: appt.id,
+                        eventType: "appointment.confirmed",
+                        payload: {
+                            appointmentId: appt.id,
+                            organizationId: appt.organizationId,
+                            paymentRecordId: payment.id,
+                            amountCents: payment.amountCents,
+                            paymentStatus: appointmentPaymentStatus,
+                        },
+                    });
+                }
 
                 this.logger.log(`Successfully recovered expired hold ${hold.id} into appointment ${appt.id}`);
-                await this.outboxService.drainImmediate();
+                await this.outboxService?.drainImmediate?.();
             } catch (err: any) {
                 let refundProviderId: string | undefined;
                 try {

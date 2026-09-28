@@ -19,9 +19,10 @@ import { OutboxModule } from "../outbox/outbox.module";
 import { RedisService } from "@bookpro/server-core";
 import { OrganizationModule } from "../organization/organization.module";
 import { AuthModule } from "../auth/auth.module";
+import { RealtimeModule } from "../realtime/realtime.module";
 
 @Module({
-    imports: [DatabaseModule, OrganizationModule, AuthModule, ConcurrencyModule, OutboxModule],
+    imports: [DatabaseModule, OrganizationModule, AuthModule, ConcurrencyModule, OutboxModule, RealtimeModule],
     controllers: [AvailabilityController],
     providers: [
         AvailabilityService,
