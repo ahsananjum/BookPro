@@ -68,7 +68,17 @@ describe("Worker Janitors Multi-Worker Concurrency Safety Suite", () => {
             mockPrisma = {
                 waitlistOffer: {
                     findMany: jest.fn().mockResolvedValue([
-                        { id: offerId, waitlistEntryId: "entry-1", organizationId: "org-1" }
+                        {
+                            id: offerId,
+                            waitlistEntryId: "entry-1",
+                            organizationId: "org-1",
+                            bookingHoldId: null,
+                            serviceId: "service-1",
+                            locationId: "location-1",
+                            staffId: "staff-1",
+                            startAt: new Date(Date.now() + 60_000),
+                            endAt: new Date(Date.now() + 3_660_000),
+                        }
                     ]),
                 },
                 waitlistEntry: {

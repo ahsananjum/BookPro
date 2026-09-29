@@ -373,7 +373,11 @@ export class PolicyService {
         const expiresAt = expiresAtDate.toISOString();
 
         // Cryptographic HMAC Signature over Canonical Quote
-        const secret = process.env.JWT_SECRET || process.env.APP_SECRET || 'bookpro_cancellation_quote_canonical_key';
+        const secret = process.env.JWT_SECRET || process.env.APP_SECRET ||
+            (process.env.NODE_ENV === 'test' ? 'test-only-cancellation-quote-signing-secret' : undefined);
+        if (!secret || secret.length < 32) {
+            throw new Error('Cancellation quote signing is not configured. Set JWT_SECRET or APP_SECRET to a strong secret.');
+        }
         const canonicalPayload = `${organizationId}:${appointmentId || 'unpersisted'}:${apptVersion}:${policyVersion}:${capturedBalanceCents}:${feeCents}:${refundableAmountCents}:${currency}:${expiresAt}`;
         const quoteSignature = crypto
             .createHmac('sha256', secret)

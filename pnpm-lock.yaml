@@ -21,6 +21,9 @@ importers:
       '@types/superagent':
         specifier: ^8.1.11
         version: 8.1.11
+      eslint:
+        specifier: ^8.57.0
+        version: 8.57.1
       prettier:
         specifier: ^3.2.5
         version: 3.9.6
