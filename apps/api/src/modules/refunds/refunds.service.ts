@@ -22,6 +22,7 @@ import * as crypto from "crypto";
 @Injectable()
 export class RefundsService {
     private readonly logger = new Logger(RefundsService.name);
+    private readonly fxService: ExchangeRateService;
 
     constructor(
         private readonly prisma: PrismaService,
@@ -31,7 +32,9 @@ export class RefundsService {
         private readonly paymentProvider: PaymentProvider,
         @Optional()
         private readonly exchangeRateService?: ExchangeRateService,
-    ) { }
+    ) {
+        this.fxService = this.exchangeRateService || new ExchangeRateService();
+    }
 
     /**
      * Processes a full or partial refund with atomic balance verification, provider idempotency,
@@ -131,7 +134,8 @@ export class RefundsService {
                     let requestedGatewayCents: number | undefined = undefined;
                     if (dto.amountCents != null) {
                         const inputCurr = (dto.currency || payment.currency).toUpperCase();
-                        if (inputCurr === payment.currency.toUpperCase()) {
+                        const payCurr = (payment.currency || "USD").toUpperCase();
+                        if (inputCurr === payCurr) {
                             requestedGatewayCents = dto.amountCents;
                         } else if (
                             inputCurr === orgCurrency.toUpperCase() &&
@@ -141,10 +145,9 @@ export class RefundsService {
                         ) {
                             const ratio = payment.amountCents / Number(meta.originalAmountCents);
                             requestedGatewayCents = Math.round(dto.amountCents * ratio);
-                        } else if (meta.exchangeRate && inputCurr !== payment.currency.toUpperCase()) {
-                            requestedGatewayCents = Math.round(dto.amountCents * Number(meta.exchangeRate));
                         } else {
-                            requestedGatewayCents = dto.amountCents;
+                            const conv = await this.fxService.convertCurrency(dto.amountCents, inputCurr, payCurr);
+                            requestedGatewayCents = conv.convertedAmountCents;
                         }
                     }
 
@@ -307,10 +310,13 @@ export class RefundsService {
                     });
                     if (appt && appt.customerId) {
                         let refundInOrgCurrency = refundAmountCents;
-                        if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null && payment.amountCents > 0) {
+                        if ((payment.currency || "USD").toUpperCase() === orgCurrency.toUpperCase()) {
+                            refundInOrgCurrency = refundAmountCents;
+                        } else if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null && payment.amountCents > 0) {
                             refundInOrgCurrency = Math.round((refundAmountCents / payment.amountCents) * Number(meta.originalAmountCents));
-                        } else if (meta.exchangeRate && payment.currency !== orgCurrency) {
-                            refundInOrgCurrency = Math.round(refundAmountCents / Number(meta.exchangeRate));
+                        } else {
+                            const conv = await this.fxService.convertCurrency(refundAmountCents, payment.currency, orgCurrency);
+                            refundInOrgCurrency = conv.convertedAmountCents;
                         }
 
                         await tx.customer.update({
@@ -339,11 +345,15 @@ export class RefundsService {
                                 (r) => r.status === RefundStatus.SUCCEEDED || r.id === res.id
                             );
                             for (const r of pRefunds) {
+                                const rCurr = (r.currency || p.currency || "USD").toUpperCase();
                                 let rInCommissionCurrency = r.amountCents;
-                                if (pMeta.originalCurrency === commission.currency && pMeta.originalAmountCents != null && p.amountCents > 0) {
+                                if (rCurr === commission.currency.toUpperCase()) {
+                                    rInCommissionCurrency = r.amountCents;
+                                } else if (pMeta.originalCurrency === commission.currency && pMeta.originalAmountCents != null && p.amountCents > 0) {
                                     rInCommissionCurrency = Math.round((r.amountCents / p.amountCents) * Number(pMeta.originalAmountCents));
-                                } else if (pMeta.exchangeRate && p.currency !== commission.currency) {
-                                    rInCommissionCurrency = Math.round(r.amountCents / Number(pMeta.exchangeRate));
+                                } else {
+                                    const conv = await this.fxService.convertCurrency(r.amountCents, rCurr, commission.currency);
+                                    rInCommissionCurrency = conv.convertedAmountCents;
                                 }
                                 totalCumulativeRefunded += rInCommissionCurrency;
                             }

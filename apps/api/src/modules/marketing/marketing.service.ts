@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import {
   AudienceCustomerDto,
   AudienceSegment,
@@ -13,10 +13,16 @@ import {
   UpdateCouponInputDto,
 } from "@bookpro/contracts";
 import { PrismaService } from "../database/prisma.service";
+import { CronService } from "../cron/cron.service";
 
 @Injectable()
 export class MarketingService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(MarketingService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly cronService?: CronService,
+  ) {}
 
   private org(ctx: RequestContext): string {
     if (!ctx.organizationId) throw new ForbiddenException("Organization context is required.");
@@ -283,6 +289,15 @@ export class MarketingService {
 
       return created;
     });
+
+    // Opportunistically flush pending campaign outbox events immediately in background
+    if (recipients.length && this.cronService) {
+      setImmediate(() => {
+        this.cronService!.processPendingOutbox().catch((err: any) =>
+          this.logger.warn(`Opportunistic campaign flush failed: ${err.message}`)
+        );
+      });
+    }
 
     return campaign;
   }

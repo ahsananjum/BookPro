@@ -276,6 +276,8 @@ export class PaymentsService {
                         originalCurrency: conversion.originalCurrency,
                         exchangeRate: String(conversion.rate),
                         usdCents: String(conversion.usdCents),
+                        couponCode: String(quote.appliedCouponCode || ""),
+                        discountCents: String(quote.discountCents || 0),
                     },
                 });
 
@@ -296,6 +298,8 @@ export class PaymentsService {
                             originalCurrency: conversion.originalCurrency,
                             exchangeRate: conversion.rate,
                             usdCents: conversion.usdCents,
+                            couponCode: quote.appliedCouponCode || undefined,
+                            discountCents: quote.discountCents || undefined,
                         },
                     },
                 });
@@ -857,8 +861,16 @@ export class PaymentsService {
                     const quote = (hold.quoteSnapshot as any) || {};
                     const paymentMeta = (payment.metadata as any) || {};
                     const orgCurrency = paymentMeta.originalCurrency || quote.currency || payment.organization?.currency || "USD";
-                    const fullPriceCents = Number(quote.basePriceCents ?? quote.totalCents ?? quote.priceCents ?? paymentMeta.originalAmountCents ?? payment.amountCents);
-                    const paidDepositInOrgCurrency = Number(paymentMeta.originalAmountCents ?? (payment.currency === orgCurrency ? payment.amountCents : Math.round(payment.amountCents / (paymentMeta.exchangeRate || 1))));
+                    const fullPriceCents = Number(quote.totalCents ?? (quote.basePriceCents ? quote.basePriceCents - (quote.discountCents || 0) : undefined) ?? quote.priceCents ?? paymentMeta.originalAmountCents ?? payment.amountCents);
+                    let paidDepositInOrgCurrency = payment.amountCents;
+                    if (paymentMeta.originalAmountCents != null) {
+                        paidDepositInOrgCurrency = Number(paymentMeta.originalAmountCents);
+                    } else if (payment.currency === orgCurrency) {
+                        paidDepositInOrgCurrency = payment.amountCents;
+                    } else {
+                        const conv = await this.exchangeRateService.convertCurrency(payment.amountCents, payment.currency, orgCurrency);
+                        paidDepositInOrgCurrency = conv.convertedAmountCents;
+                    }
                     const appointmentPaymentStatus = paidDepositInOrgCurrency >= fullPriceCents ? "PAID" : "PARTIALLY_PAID";
 
                     // 3. Create confirmed Appointment in native organization currency
@@ -882,6 +894,9 @@ export class PaymentsService {
                             internalNotes: hold.guestNotes ? `Customer Preferences: ${hold.guestNotes}` : null,
                             metadata: {
                                 customerNotes: hold.guestNotes || null,
+                                basePriceCents: Number(quote.basePriceCents || fullPriceCents),
+                                discountCents: Number(quote.discountCents || 0),
+                                couponCode: quote.appliedCouponCode || paymentMeta.couponCode || null,
                                 depositPaidCents: paidDepositInOrgCurrency,
                                 remainingBalanceCents: Math.max(0, fullPriceCents - paidDepositInOrgCurrency),
                                 chargedUsdCents: payment.amountCents,
@@ -1363,22 +1378,21 @@ export class PaymentsService {
                     convertedAmountCents = p.amountCents;
                 } else if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null) {
                     convertedAmountCents = Number(meta.originalAmountCents);
-                } else if (meta.exchangeRate && p.currency !== orgCurrency) {
-                    convertedAmountCents = Math.round(p.amountCents / Number(meta.exchangeRate));
                 } else {
                     const conv = await this.exchangeRateService.convertCurrency(p.amountCents, p.currency, orgCurrency).catch(() => ({ convertedAmountCents: p.amountCents }));
                     convertedAmountCents = conv.convertedAmountCents;
                 }
 
                 let totalRefundedConvertedCents = 0;
-                const convertedRefunds = (p.refunds || []).map((r) => {
+                const convertedRefunds = await Promise.all((p.refunds || []).map(async (r) => {
                     let rConverted = r.amountCents;
                     if (r.currency === orgCurrency) {
                         rConverted = r.amountCents;
                     } else if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null && p.amountCents > 0) {
                         rConverted = Math.round((r.amountCents / p.amountCents) * Number(meta.originalAmountCents));
-                    } else if (meta.exchangeRate && r.currency !== orgCurrency) {
-                        rConverted = Math.round(r.amountCents / Number(meta.exchangeRate));
+                    } else {
+                        const conv = await this.exchangeRateService.convertCurrency(r.amountCents, r.currency, orgCurrency).catch(() => ({ convertedAmountCents: r.amountCents }));
+                        rConverted = conv.convertedAmountCents;
                     }
                     if (r.status === "SUCCEEDED") {
                         totalRefundedConvertedCents += rConverted;
@@ -1388,7 +1402,7 @@ export class PaymentsService {
                         convertedAmountCents: rConverted,
                         convertedCurrency: orgCurrency,
                     };
-                });
+                }));
 
                 return {
                     ...p,
@@ -1458,8 +1472,6 @@ export class PaymentsService {
                 amountInOrgCurrency = p.amountCents;
             } else if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null) {
                 amountInOrgCurrency = Number(meta.originalAmountCents);
-            } else if (meta.exchangeRate && p.currency !== orgCurrency) {
-                amountInOrgCurrency = Math.round(p.amountCents / Number(meta.exchangeRate));
             } else {
                 const conv = await this.exchangeRateService.convertCurrency(p.amountCents, p.currency, orgCurrency).catch(() => ({ convertedAmountCents: p.amountCents }));
                 amountInOrgCurrency = conv.convertedAmountCents;
@@ -1483,8 +1495,6 @@ export class PaymentsService {
                 rInOrgCurrency = r.amountCents;
             } else if (pMeta.originalCurrency === orgCurrency && pMeta.originalAmountCents != null && (r.payment?.amountCents || 0) > 0) {
                 rInOrgCurrency = Math.round((r.amountCents / r.payment!.amountCents) * Number(pMeta.originalAmountCents));
-            } else if (pMeta.exchangeRate && r.currency !== orgCurrency) {
-                rInOrgCurrency = Math.round(r.amountCents / Number(pMeta.exchangeRate));
             } else {
                 const conv = await this.exchangeRateService.convertCurrency(r.amountCents, r.currency, orgCurrency).catch(() => ({ convertedAmountCents: r.amountCents }));
                 rInOrgCurrency = conv.convertedAmountCents;

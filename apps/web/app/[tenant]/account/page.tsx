@@ -104,6 +104,9 @@ interface CustomerBillingTransaction {
   paidInOrgCents?: number;
   balanceDueCents?: number;
   exchangeRate?: number;
+  couponCode?: string;
+  discountCents?: number;
+  basePriceCents?: number;
   status: string;
   paymentMethod: string;
   stripePaymentIntentId?: string;
@@ -250,6 +253,9 @@ function CustomerAccountContent() {
     gatewayAmountCents?: number;
     gatewayCurrency?: string;
     exchangeRate?: number;
+    couponCode?: string;
+    discountCents?: number;
+    basePriceCents?: number;
     paymentRecords?: any[];
     status?: string;
     invoiceNumber?: string;
@@ -747,11 +753,20 @@ function CustomerAccountContent() {
   };
 
   const handleOpenInvoiceFromAppointment = (appt: CustomerAppointment) => {
+    const matchingTx = (billingData?.transactions || []).find(
+      (tx) => tx.appointmentId === appt.id || tx.appointment?.id === appt.id
+    );
+    if (matchingTx) {
+      handleOpenInvoiceFromBilling(matchingTx);
+      return;
+    }
+
     const orgCurrency = organization?.currency || appt.currency || "USD";
     const payment = appt.paymentRecords?.[0];
     const isPaid = appt.paymentStatus === "PAID";
     const depositPaid = isPaid ? appt.priceCents : (payment?.amountCents || 0);
     const balanceDue = isPaid ? 0 : Math.max(0, appt.priceCents - depositPaid);
+    const meta = (appt.metadata as any) || {};
 
     setSelectedInvoiceItem({
       id: appt.id,
@@ -766,6 +781,9 @@ function CustomerAccountContent() {
       gatewayAmountCents: payment?.amountCents,
       gatewayCurrency: payment?.currency || appt.currency || orgCurrency,
       exchangeRate: 1.0,
+      couponCode: meta.couponCode,
+      discountCents: meta.discountCents != null ? Number(meta.discountCents) : undefined,
+      basePriceCents: meta.basePriceCents != null ? Number(meta.basePriceCents) : undefined,
       paymentRecords: appt.paymentRecords || [],
       status: appt.status,
       invoiceNumber: `INV-${appt.id.slice(0, 8).toUpperCase()}`,
@@ -793,6 +811,9 @@ function CustomerAccountContent() {
       gatewayAmountCents: tx.amountCents,
       gatewayCurrency: tx.currency,
       exchangeRate: tx.exchangeRate || 1.0,
+      couponCode: tx.couponCode,
+      discountCents: tx.discountCents,
+      basePriceCents: tx.basePriceCents,
       paymentRecords: [
         {
           id: tx.id,
@@ -3185,14 +3206,28 @@ function CustomerAccountContent() {
                     const gross = selectedInvoiceItem.priceCents || 0;
                     const paid = selectedInvoiceItem.paidInOrgCents || 0;
                     const balanceDue = selectedInvoiceItem.balanceDueCents || 0;
+                    const discount = selectedInvoiceItem.discountCents || 0;
+                    const basePrice = selectedInvoiceItem.basePriceCents || (discount > 0 ? gross + discount : gross);
                     const net = Math.max(0, paid - totalRefunded);
 
                     return (
-                      <div style={{ marginLeft: "auto", maxWidth: "320px", marginBottom: "28px" }}>
+                      <div style={{ marginLeft: "auto", maxWidth: "340px", marginBottom: "28px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#94a3b8", marginBottom: "6px" }}>
                           <span>Service Subtotal:</span>
-                          <span style={{ color: "#f8fafc", fontWeight: 700 }}>{formatMoney(gross, selectedInvoiceItem.currency || "USD")}</span>
+                          <span style={{ color: "#f8fafc", fontWeight: 700 }}>{formatMoney(basePrice, selectedInvoiceItem.currency || "USD")}</span>
                         </div>
+                        {discount > 0 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#34d399", marginBottom: "6px" }}>
+                            <span>Promo Discount {selectedInvoiceItem.couponCode ? `(${selectedInvoiceItem.couponCode})` : ""}:</span>
+                            <span style={{ fontWeight: 700 }}>-{formatMoney(discount, selectedInvoiceItem.currency || "USD")}</span>
+                          </div>
+                        )}
+                        {discount > 0 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#94a3b8", marginBottom: "6px" }}>
+                            <span>Discounted Total:</span>
+                            <span style={{ color: "#f8fafc", fontWeight: 700 }}>{formatMoney(gross, selectedInvoiceItem.currency || "USD")}</span>
+                          </div>
+                        )}
                         {paid > 0 && (
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#38bdf8", marginBottom: "6px" }}>
                             <span>Deposit / Online Paid:</span>

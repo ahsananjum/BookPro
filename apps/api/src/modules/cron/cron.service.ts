@@ -538,21 +538,102 @@ export class CronService implements OnModuleInit {
             }
 
             case "marketing.campaign_recipient_requested": {
-                if (payload.recipientEmail) {
-                    await this.sendBrevoEmail(
-                        payload.recipientEmail,
-                        payload.subject || "Special Update from BookPro",
-                        payload.htmlBody || `<p>${payload.textBody || ""}</p>`,
-                        payload.textBody || "",
-                        payload.studioName || "BookPro",
-                    );
-                }
+                await this.dispatchCampaignRecipientEmail(payload);
                 break;
             }
 
             default:
                 this.logger.debug(`Outbox event ${event.eventType} has no custom handler.`);
                 break;
+        }
+    }
+
+    private async dispatchCampaignRecipientEmail(payload: any): Promise<void> {
+        if (!payload.recipientEmail) return;
+
+        const campaignId = payload.campaignId;
+        const customerId = payload.customerId;
+        const dedupeKey = `campaign:${campaignId}:${customerId || payload.recipientEmail}`;
+        const subject = payload.subject || "Special Update from BookPro";
+        const htmlBody = payload.htmlBody || `<p>${payload.textBody || ""}</p>`;
+        const textBody = payload.textBody || "";
+        const studioName = payload.studioName || "BookPro";
+
+        let messageId: string | null = null;
+        let lastError: string | null = null;
+
+        try {
+            messageId = await this.sendBrevoEmail(
+                payload.recipientEmail,
+                subject,
+                htmlBody,
+                textBody,
+                studioName,
+            );
+        } catch (err: any) {
+            lastError = err?.message || "Failed to dispatch email via Brevo";
+            this.logger.warn(`Campaign email dispatch failed for ${payload.recipientEmail}: ${lastError}`);
+        }
+
+        const isDelivered = Boolean(messageId);
+
+        // 1. Create or update durable Notification record
+        await this.prisma.notification.upsert({
+            where: { dedupeKey },
+            create: {
+                organizationId: payload.organizationId || (campaignId ? (await this.prisma.emailCampaign.findUnique({ where: { id: campaignId }, select: { organizationId: true } }))?.organizationId : null),
+                recipient: payload.recipientEmail,
+                channel: "EMAIL",
+                eventType: "marketing.campaign_recipient_requested",
+                templateName: "organization_campaign",
+                status: isDelivered ? "SENT" : "FAILED",
+                providerId: messageId,
+                sentAt: isDelivered ? new Date() : null,
+                lastError,
+                customerId,
+                emailCampaignId: campaignId,
+                dedupeKey,
+                variables: {
+                    subject,
+                    htmlBody,
+                    textBody,
+                    customerName: payload.customerName,
+                    studioName,
+                    bookingLink: payload.bookingLink || "",
+                    couponCode: payload.couponCode || "",
+                    discountValue: payload.discountValue || "",
+                },
+            },
+            update: {
+                status: isDelivered ? "SENT" : "FAILED",
+                providerId: messageId,
+                sentAt: isDelivered ? new Date() : null,
+                lastError,
+            },
+        }).catch((e: any) => this.logger.warn(`Failed to upsert notification for campaign: ${e.message}`));
+
+        // 2. Authoritatively update EmailCampaign delivery counts and status
+        if (campaignId) {
+            try {
+                const campaign = await this.prisma.emailCampaign.update({
+                    where: { id: campaignId },
+                    data: isDelivered
+                        ? { deliveredCount: { increment: 1 } }
+                        : { failedCount: { increment: 1 } },
+                });
+
+                if ((campaign.deliveredCount + campaign.failedCount) >= campaign.recipientCount) {
+                    await this.prisma.emailCampaign.update({
+                        where: { id: campaignId },
+                        data: {
+                            status: "SENT",
+                            sentAt: new Date(),
+                        },
+                    });
+                }
+            } catch (campErr: any) {
+                this.logger.warn(`Failed to update campaign counts for ${campaignId}: ${campErr.message}`);
+            }
         }
     }
 

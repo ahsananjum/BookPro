@@ -1,11 +1,19 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { UpdatePolicyConfigDto, CancellationQuoteResponseDto } from '@bookpro/contracts';
 import * as crypto from 'crypto';
+import { ExchangeRateService } from '../payments/exchange-rate.service';
 
 @Injectable()
 export class PolicyService {
-    constructor(private readonly prisma: PrismaService) { }
+    private readonly fxService: ExchangeRateService;
+
+    constructor(
+        private readonly prisma: PrismaService,
+        @Optional() private readonly exchangeRateService?: ExchangeRateService,
+    ) {
+        this.fxService = this.exchangeRateService || new ExchangeRateService();
+    }
 
     async getPolicies(organizationId: string) {
         return this.prisma.policyConfig.findMany({
@@ -174,9 +182,8 @@ export class PolicyService {
                         if (originalAmt && originalAmt > 0) {
                             paidInApptCurrency = originalAmt;
                         } else if (p.currency !== currency) {
-                            if ((p.metadata as any)?.exchangeRate && Number((p.metadata as any).exchangeRate) > 0) {
-                                paidInApptCurrency = Math.round(p.amountCents / Number((p.metadata as any).exchangeRate));
-                            }
+                            const conv = await this.fxService.convertCurrency(p.amountCents, p.currency, currency);
+                            paidInApptCurrency = conv.convertedAmountCents;
                         }
 
                         const activeRefunds = (p.refunds || [])
@@ -231,9 +238,8 @@ export class PolicyService {
                                 if (originalAmt && originalAmt > 0) {
                                     paidInApptCurrency = originalAmt;
                                 } else if (p.currency !== currency) {
-                                    if ((p.metadata as any)?.exchangeRate && Number((p.metadata as any).exchangeRate) > 0) {
-                                        paidInApptCurrency = Math.round(p.amountCents / Number((p.metadata as any).exchangeRate));
-                                    }
+                                    const conv = await this.fxService.convertCurrency(p.amountCents, p.currency, currency);
+                                    paidInApptCurrency = conv.convertedAmountCents;
                                 }
                                 const activeRefunds = (p.refunds || [])
                                     .filter((r: any) => r.status === 'SUCCEEDED' || r.status === 'PENDING')
@@ -532,9 +538,8 @@ export class PolicyService {
                         if (originalAmt && originalAmt > 0) {
                             paidInApptCurrency = originalAmt;
                         } else if (p.currency !== quoteRecord.currency) {
-                            if ((p.metadata as any)?.exchangeRate && Number((p.metadata as any).exchangeRate) > 0) {
-                                paidInApptCurrency = Math.round(p.amountCents / Number((p.metadata as any).exchangeRate));
-                            }
+                            const conv = await this.fxService.convertCurrency(p.amountCents, p.currency, quoteRecord.currency);
+                            paidInApptCurrency = conv.convertedAmountCents;
                         }
 
                         const activeRefunds = (p.refunds || [])

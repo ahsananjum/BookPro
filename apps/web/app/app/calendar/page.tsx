@@ -242,6 +242,7 @@ export default function BusinessCalendarPage() {
   const [staffList, setStaffList] = useState<StaffItem[]>([]);
   const [servicesList, setServicesList] = useState<ServiceItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   // Inspection Drawer & Action State
@@ -371,9 +372,13 @@ export default function BusinessCalendarPage() {
   }, [selectedDate, viewMode]);
 
   // --- Fetch Appointments Authoritatively ---
-  const fetchAppointments = useCallback(async () => {
+  const fetchAppointments = useCallback(async (isBackground = false) => {
     if (!orgId) return;
-    setLoading(true);
+    if (isBackground) {
+      setIsSyncing(true);
+    } else {
+      setLoading(true);
+    }
     try {
       const params = new URLSearchParams({
         organizationId: orgId,
@@ -402,20 +407,38 @@ export default function BusinessCalendarPage() {
       ]);
 
       if (res.success && Array.isArray(res.data)) {
-        setAppointments(res.data);
-      } else {
+        const nextAppts: AppointmentItem[] = res.data;
+        setAppointments((prev: AppointmentItem[]): AppointmentItem[] => {
+          if (JSON.stringify(prev) === JSON.stringify(nextAppts)) {
+            return prev;
+          }
+          return nextAppts;
+        });
+      } else if (!isBackground) {
         setAppointments([]);
       }
 
       if (holdsRes?.success && Array.isArray(holdsRes.data)) {
-        setWaitlistHolds(holdsRes.data);
-      } else {
+        const nextHolds: any[] = holdsRes.data;
+        setWaitlistHolds((prev: any[]): any[] => {
+          if (JSON.stringify(prev) === JSON.stringify(nextHolds)) {
+            return prev;
+          }
+          return nextHolds;
+        });
+      } else if (!isBackground) {
         setWaitlistHolds([]);
       }
     } catch {
-      setAppointments([]);
+      if (!isBackground) {
+        setAppointments([]);
+      }
     } finally {
-      setLoading(false);
+      if (isBackground) {
+        setIsSyncing(false);
+      } else {
+        setLoading(false);
+      }
     }
   }, [orgId, dateRange, locationFilter, staffFilter, serviceFilter, statusFilter]);
 
@@ -453,11 +476,11 @@ export default function BusinessCalendarPage() {
     fetchAppointments();
   }, [fetchAppointments]);
 
-  // Self-healing periodic synchronization (every 20 seconds) for live calendar state
+  // Self-healing periodic synchronization (every 20 seconds) for live calendar state without UI flash
   useEffect(() => {
     if (!orgId) return;
     const interval = setInterval(() => {
-      fetchAppointments();
+      fetchAppointments(true);
     }, 20000);
     return () => clearInterval(interval);
   }, [orgId, fetchAppointments]);
@@ -2116,7 +2139,7 @@ export default function BusinessCalendarPage() {
                 cursor: "pointer",
               }}
             >
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={14} className={loading || isSyncing ? "animate-spin" : ""} />
               <span>Refresh</span>
             </button>
 

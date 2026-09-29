@@ -7,12 +7,15 @@ import { ExchangeRateService } from "../payments/exchange-rate.service";
 @Injectable()
 export class CommissionsService {
     private readonly logger = new Logger(CommissionsService.name);
+    private readonly fxService: ExchangeRateService;
 
     constructor(
         private readonly prisma: PrismaService,
         @Optional() private readonly realtimeService?: RealtimeService,
         @Optional() private readonly exchangeRateService?: ExchangeRateService,
-    ) { }
+    ) {
+        this.fxService = this.exchangeRateService || new ExchangeRateService();
+    }
 
     private async broadcastCommissionEvent(organizationId: string, eventType: string, payload: any) {
         if (!this.realtimeService) return;
@@ -104,8 +107,9 @@ export class CommissionsService {
                 let paidInApptCurrency = succeededPayment.amountCents;
                 if (pMeta.originalCurrency === appointment.currency && pMeta.originalAmountCents != null) {
                     paidInApptCurrency = Number(pMeta.originalAmountCents);
-                } else if (pMeta.exchangeRate && succeededPayment.currency !== appointment.currency) {
-                    paidInApptCurrency = Math.round(succeededPayment.amountCents / Number(pMeta.exchangeRate));
+                } else if (succeededPayment.currency !== appointment.currency) {
+                    const conv = await this.fxService.convertCurrency(succeededPayment.amountCents, succeededPayment.currency, appointment.currency);
+                    paidInApptCurrency = conv.convertedAmountCents;
                 }
                 priceSnapshotCents = paidInApptCurrency;
             }

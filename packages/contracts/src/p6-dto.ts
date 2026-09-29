@@ -96,6 +96,7 @@ export interface PublicPersistHoldDetailsDto {
     phone?: string | null;
     notes?: string | null;
     consentMarketing?: boolean;
+    couponCode?: string | null;
     intakeResponses?: Array<{
         intakeFormId: string;
         responses: Record<string, any>;
@@ -175,6 +176,7 @@ export interface CanonicalHoldReviewDto {
         payableNowCents: number;
         remainingBalanceCents: number;
         currency: string;
+        appliedCouponCode?: string | null;
         taxBehavior?: "EXCLUSIVE" | "INCLUSIVE" | "NONE";
         taxRatePct?: number;
     };

@@ -287,6 +287,7 @@ export const publicHoldDetailsSchema = z.object({
     phone: z.string().trim().max(40).optional().nullable(),
     notes: z.string().trim().max(1000).optional().nullable(),
     consentMarketing: z.boolean().default(false),
+    couponCode: z.string().trim().min(2).max(32).optional().nullable(),
     intakeResponses: z.array(z.object({
         intakeFormId: uuid,
         responses: z.record(z.any()),

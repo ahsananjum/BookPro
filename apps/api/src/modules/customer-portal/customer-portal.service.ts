@@ -853,36 +853,37 @@ export class CustomerPortalService {
       let paidInOrgCents = p.amountCents;
 
       if (payCurrency !== orgCurrency) {
-        if (meta.exchangeRate && typeof meta.exchangeRate === "number") {
-          exchangeRate = meta.exchangeRate;
-          paidInOrgCents = Math.round(p.amountCents * exchangeRate);
-        } else {
-          try {
-            const conv = await fxService.convertCurrency(p.amountCents, payCurrency, orgCurrency);
-            paidInOrgCents = conv.convertedAmountCents;
-            exchangeRate = conv.rate;
-          } catch {
-            paidInOrgCents = p.amountCents;
-            exchangeRate = 1.0;
-          }
+        try {
+          const conv = await fxService.convertCurrency(p.amountCents, payCurrency, orgCurrency);
+          paidInOrgCents = conv.convertedAmountCents;
+          exchangeRate = conv.rate;
+        } catch {
+          paidInOrgCents = p.amountCents;
+          exchangeRate = 1.0;
         }
       }
 
-      // Compute refunds in org currency
+      // Compute refunds in org currency via live forex service
       let pRefundsOrgCents = 0;
-      const enrichedRefunds = (p.refunds || []).map((rf: any) => {
+      const enrichedRefunds: any[] = [];
+      for (const rf of p.refunds || []) {
         const rfCurrency = (rf.currency || payCurrency).toUpperCase();
         let rfInOrg = rf.amountCents;
         if (rfCurrency !== orgCurrency) {
-          rfInOrg = Math.round(rf.amountCents * exchangeRate);
+          try {
+            const conv = await fxService.convertCurrency(rf.amountCents, rfCurrency, orgCurrency);
+            rfInOrg = conv.convertedAmountCents;
+          } catch {
+            rfInOrg = rf.amountCents;
+          }
         }
         pRefundsOrgCents += rfInOrg;
-        return {
+        enrichedRefunds.push({
           ...rf,
           amountInOrgCents: rfInOrg,
           orgCurrency,
-        };
-      });
+        });
+      }
 
       if (p.status === "SUCCEEDED" || p.status === "PARTIALLY_REFUNDED" || p.status === "REFUNDED") {
         totalPaidInOrgCents += paidInOrgCents;
@@ -891,6 +892,9 @@ export class CustomerPortalService {
 
       const originalServicePriceCents = p.appointment?.priceCents || meta.originalAmountCents || paidInOrgCents;
       const balanceDueCents = Math.max(0, originalServicePriceCents - (paidInOrgCents - pRefundsOrgCents));
+      const couponCode = meta.couponCode || (p.appointment?.metadata as any)?.couponCode || undefined;
+      const discountCents = meta.discountCents != null ? Number(meta.discountCents) : ((p.appointment?.metadata as any)?.discountCents != null ? Number((p.appointment?.metadata as any).discountCents) : 0);
+      const basePriceCents = (p.appointment?.metadata as any)?.basePriceCents != null ? Number((p.appointment?.metadata as any).basePriceCents) : (discountCents > 0 ? originalServicePriceCents + discountCents : undefined);
 
       enrichedTransactions.push({
         id: p.id,
@@ -901,6 +905,9 @@ export class CustomerPortalService {
         paidInOrgCents,
         balanceDueCents,
         exchangeRate,
+        couponCode,
+        discountCents,
+        basePriceCents,
         status: p.status,
         paymentMethod: meta.paymentMethod || (p.provider === "STRIPE" ? "Credit / Debit Card" : p.provider) || "Credit / Debit Card",
         stripePaymentIntentId: p.providerPaymentId,
@@ -920,6 +927,7 @@ export class CustomerPortalService {
           priceCents: p.appointment.priceCents,
           currency: p.appointment.currency || orgCurrency,
           paymentStatus: p.appointment.paymentStatus,
+          metadata: p.appointment.metadata,
         } : undefined,
         refunds: enrichedRefunds,
       });
@@ -974,7 +982,7 @@ export class CustomerPortalService {
     const netPaidCents = Math.max(0, totalPaidInOrgCents - totalRefundedInOrgCents);
 
     // Opportunistically persist authoritative customer total spent if outdated
-    if ((customer.totalSpentCents || 0) < netPaidCents) {
+    if ((customer.totalSpentCents || 0) !== netPaidCents) {
       this.prisma.customer.update({
         where: { id: customer.id },
         data: { totalSpentCents: netPaidCents },

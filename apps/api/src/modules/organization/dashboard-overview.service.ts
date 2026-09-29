@@ -112,9 +112,6 @@ export class DashboardOverviewService {
         if (meta.originalCurrency === targetCurrency && meta.originalAmountCents != null) {
             return Number(meta.originalAmountCents);
         }
-        if (meta.exchangeRate && payment.currency && payment.currency !== targetCurrency) {
-            return Math.round(payment.amountCents / meta.exchangeRate);
-        }
         const sourceCurrency = (payment.currency || meta.originalCurrency || orgDefaultCurrency || "USD").toUpperCase();
         return this.convertCents(payment.amountCents, sourceCurrency, targetCurrency, rates);
     }

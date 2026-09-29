@@ -971,6 +971,7 @@ export default function PublicBookingPage() {
           phone: phone.trim() || undefined,
           notes: notes.trim() || undefined,
           consentMarketing,
+          couponCode: appliedCouponCode || undefined,
           intakeResponses: formattedIntake,
         }),
       });

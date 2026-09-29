@@ -164,6 +164,7 @@ const PRESET_TEMPLATES = [
 
 export default function MarketingPage() {
   const { user } = useAuth();
+  const orgId = user?.organizationId;
   const orgCurrency = user?.currency || "USD";
   const [activeTab, setActiveTab] = useState<"campaigns" | "templates" | "coupons" | "audience">("campaigns");
   const [stats, setStats] = useState<MarketingStats | null>(null);
@@ -229,11 +230,11 @@ export default function MarketingPage() {
     setLoading(true);
     try {
       const [statsRes, tplRes, campRes, cpnRes, audRes] = await Promise.all([
-        apiFetch<MarketingStats>("/marketing/stats"),
-        apiFetch<Template[]>("/marketing/templates"),
-        apiFetch<Campaign[]>("/marketing/campaigns"),
-        apiFetch<Coupon[]>("/marketing/coupons"),
-        apiFetch<AudienceCustomer[]>("/marketing/audience"),
+        apiFetch<MarketingStats>("/marketing/stats", {}, orgId),
+        apiFetch<Template[]>("/marketing/templates", {}, orgId),
+        apiFetch<Campaign[]>("/marketing/campaigns", {}, orgId),
+        apiFetch<Coupon[]>("/marketing/coupons", {}, orgId),
+        apiFetch<AudienceCustomer[]>("/marketing/audience", {}, orgId),
       ]);
 
       if (statsRes.success) setStats(statsRes.data || null);
@@ -246,7 +247,7 @@ export default function MarketingPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [orgId]);
 
   useEffect(() => {
     loadAll();
@@ -256,7 +257,7 @@ export default function MarketingPage() {
   useEffect(() => {
     if (!showCampaignModal) return;
     setLoadingRecipientCount(true);
-    apiFetch<{ count: number }>(`/marketing/audience/count?segment=${selectedSegment}`)
+    apiFetch<{ count: number }>(`/marketing/audience/count?segment=${selectedSegment}`, {}, orgId)
       .then((res) => {
         if (res.success && res.data) setRecipientPreviewCount(res.data.count);
         else setRecipientPreviewCount(0);
@@ -295,7 +296,7 @@ export default function MarketingPage() {
     const res = await apiFetch<Campaign>("/marketing/campaigns/send", {
       method: "POST",
       body: JSON.stringify(payload),
-    });
+    }, orgId);
 
     setBusy(false);
     if (res.success) {
@@ -315,7 +316,7 @@ export default function MarketingPage() {
     setLoadingDetail(true);
     setInspectingCampaign(null);
     setErrorState(null);
-    const res = await apiFetch<CampaignDetail>(`/marketing/campaigns/${campaignId}`);
+    const res = await apiFetch<CampaignDetail>(`/marketing/campaigns/${campaignId}`, {}, orgId);
     setLoadingDetail(false);
     if (res.success && res.data) {
       setInspectingCampaign(res.data);
@@ -376,7 +377,8 @@ export default function MarketingPage() {
       {
         method: editingTemplate ? "PUT" : "POST",
         body: JSON.stringify(payload),
-      }
+      },
+      orgId
     );
 
     setBusy(false);
@@ -393,7 +395,7 @@ export default function MarketingPage() {
   async function handleDuplicateTemplate(tplId: string) {
     setBusy(true);
     setErrorState(null);
-    const res = await apiFetch(`/marketing/templates/${tplId}/duplicate`, { method: "POST" });
+    const res = await apiFetch(`/marketing/templates/${tplId}/duplicate`, { method: "POST" }, orgId);
     setBusy(false);
     if (res.success) {
       setMessage({ text: "Template cloned successfully." });
@@ -408,7 +410,7 @@ export default function MarketingPage() {
     if (!confirm(`Are you sure you want to delete template "${tpl.name}"?`)) return;
     setBusy(true);
     setErrorState(null);
-    const res = await apiFetch(`/marketing/templates/${tpl.id}`, { method: "DELETE" });
+    const res = await apiFetch(`/marketing/templates/${tpl.id}`, { method: "DELETE" }, orgId);
     setBusy(false);
     if (res.success) {
       setMessage({ text: "Template deleted." });
@@ -469,19 +471,33 @@ export default function MarketingPage() {
     setErrorState(null);
 
     const valNum = parseFloat(couponDiscountValue);
+    if (isNaN(valNum) || valNum <= 0) {
+      setErrorState({ message: "Please enter a valid positive discount value." } as any);
+      setBusy(false);
+      return;
+    }
     const discountValue =
       couponDiscountType === "PERCENTAGE"
         ? Math.round(valNum)
         : Math.round(valNum * 100);
 
+    let parsedValidTo: string | null = null;
+    if (couponValidTo && couponValidTo.trim()) {
+      try {
+        parsedValidTo = new Date(couponValidTo).toISOString();
+      } catch {
+        parsedValidTo = null;
+      }
+    }
+
     const payload = {
       code: couponCode.trim().toUpperCase(),
       discountType: couponDiscountType,
       discountValue,
-      minSpendCents: couponMinSpend ? Math.round(parseFloat(couponMinSpend) * 100) : null,
-      maxDiscountCents: couponMaxDiscount ? Math.round(parseFloat(couponMaxDiscount) * 100) : null,
-      validTo: couponValidTo ? new Date(couponValidTo).toISOString() : null,
-      usageLimit: couponUsageLimit ? parseInt(couponUsageLimit, 10) : null,
+      minSpendCents: couponMinSpend && !isNaN(parseFloat(couponMinSpend)) ? Math.round(parseFloat(couponMinSpend) * 100) : null,
+      maxDiscountCents: couponMaxDiscount && !isNaN(parseFloat(couponMaxDiscount)) ? Math.round(parseFloat(couponMaxDiscount) * 100) : null,
+      validTo: parsedValidTo,
+      usageLimit: couponUsageLimit && !isNaN(parseInt(couponUsageLimit, 10)) ? parseInt(couponUsageLimit, 10) : null,
     };
 
     const res = await apiFetch(
@@ -489,7 +505,8 @@ export default function MarketingPage() {
       {
         method: editingCoupon ? "PUT" : "POST",
         body: JSON.stringify(payload),
-      }
+      },
+      orgId
     );
 
     setBusy(false);
@@ -505,7 +522,7 @@ export default function MarketingPage() {
 
   async function handleToggleCoupon(id: string) {
     setErrorState(null);
-    const res = await apiFetch(`/marketing/coupons/${id}/toggle`, { method: "PATCH" });
+    const res = await apiFetch(`/marketing/coupons/${id}/toggle`, { method: "PATCH" }, orgId);
     if (res.success) {
       await loadAll();
     } else {
@@ -516,7 +533,7 @@ export default function MarketingPage() {
   async function handleDeleteCoupon(cpn: Coupon) {
     if (!confirm(`Delete promo code "${cpn.code}"?`)) return;
     setErrorState(null);
-    const res = await apiFetch(`/marketing/coupons/${cpn.id}`, { method: "DELETE" });
+    const res = await apiFetch(`/marketing/coupons/${cpn.id}`, { method: "DELETE" }, orgId);
     if (res.success) {
       setMessage({ text: "Promo code deleted." });
       setErrorState(null);

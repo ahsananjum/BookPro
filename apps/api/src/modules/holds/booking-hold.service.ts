@@ -218,6 +218,37 @@ export class BookingHoldService {
             });
         }
 
+        let quoteSnapshot = (hold.quoteSnapshot as any) || {};
+        if (input.couponCode) {
+            try {
+                const calculated = await this.pricingService.calculateQuote(organizationId, {
+                    serviceId: hold.serviceId,
+                    locationId: hold.locationId,
+                    staffId: hold.staffId || undefined,
+                    couponCode: input.couponCode.trim().toUpperCase(),
+                });
+                if (calculated.appliedCouponCode && calculated.discountCents > 0) {
+                    quoteSnapshot = {
+                        ...quoteSnapshot,
+                        priceCents: calculated.totalCents,
+                        totalCents: calculated.totalCents,
+                        basePriceCents: calculated.basePriceCents,
+                        discountCents: calculated.discountCents,
+                        appliedCouponCode: calculated.appliedCouponCode,
+                        depositAmountCents: calculated.payableNowCents,
+                        payableNowCents: calculated.payableNowCents,
+                        remainingBalanceCents: calculated.remainingBalanceCents,
+                        currency: calculated.currency,
+                        taxAmountCents: calculated.taxCents,
+                        taxBehavior: calculated.taxBehavior,
+                        taxRatePct: calculated.taxRatePct,
+                    };
+                }
+            } catch (pricingErr: any) {
+                this.logger.warn(`Failed to apply coupon during persistHoldDetails: ${pricingErr.message}`);
+            }
+        }
+
         const normalizedEmail = input.email.toLowerCase().trim();
         const normalizedName = input.fullName.trim();
         const normalizedPhone = input.phone?.trim() || null;
@@ -236,6 +267,7 @@ export class BookingHoldService {
                 consentCapturedAt: consentMarketing ? detailsCompletedAt : null,
                 detailsCompletedAt,
                 intakeSnapshot: intakeSnapshotList as any,
+                quoteSnapshot: quoteSnapshot as any,
             },
             include: {
                 organization: true,
@@ -270,8 +302,10 @@ export class BookingHoldService {
         const staff = hold.staff;
 
         const basePriceCents = Number(quote.basePriceCents ?? quote.priceCents ?? srv.priceCents ?? 0);
+        const discountCents = Number(quote.discountCents ?? 0);
+        const totalCents = Number(quote.totalCents ?? Math.max(0, basePriceCents - discountCents));
         const payableNowCents = Number(quote.payableNowCents ?? quote.depositAmountCents ?? quote.depositCents ?? 0);
-        const remainingBalanceCents = Number(quote.remainingBalanceCents ?? Math.max(0, basePriceCents - payableNowCents));
+        const remainingBalanceCents = Number(quote.remainingBalanceCents ?? Math.max(0, totalCents - payableNowCents));
 
         return {
             holdId: hold.id,
@@ -329,13 +363,16 @@ export class BookingHoldService {
             intake: Array.isArray(hold.intakeSnapshot) ? hold.intakeSnapshot : [],
             quote: {
                 basePriceCents,
-                taxCents: Number(quote.taxCents || 0),
-                discountCents: Number(quote.discountCents || 0),
-                totalCents: Number(quote.totalCents || basePriceCents),
+                taxCents: Number(quote.taxCents || quote.taxAmountCents || 0),
+                discountCents,
+                totalCents,
                 depositCents: Number(quote.depositCents || payableNowCents),
                 payableNowCents,
                 remainingBalanceCents,
                 currency: quote.currency || srv.currency || org.currency || "USD",
+                appliedCouponCode: quote.appliedCouponCode || null,
+                taxBehavior: quote.taxBehavior,
+                taxRatePct: quote.taxRatePct,
             },
             policy: {
                 cancelCutoffHours: quote.cancellationPolicy?.cancelCutoffHours ?? 24,

@@ -2,13 +2,35 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException, 
 import { PrismaService } from "../database/prisma.service";
 import { CustomerDetailsResponseDto, CustomerTimelineEventDto, RequestContext } from "@bookpro/contracts";
 import { CustomerPortalService } from "../customer-portal/customer-portal.service";
+import { ExchangeRateService } from "../payments/exchange-rate.service";
 
 @Injectable()
 export class CrmService {
+    private readonly fxService: ExchangeRateService;
+
     constructor(
         private readonly prisma: PrismaService,
         @Optional() private readonly customerPortalService?: CustomerPortalService,
-    ) { }
+        @Optional() private readonly exchangeRateService?: ExchangeRateService,
+    ) {
+        this.fxService = this.exchangeRateService || new ExchangeRateService();
+    }
+
+    private convertCents(
+        amountCents: number,
+        fromCurrency: string,
+        targetCurrency: string,
+        rates: Record<string, number>
+    ): number {
+        const from = (fromCurrency || "USD").toUpperCase();
+        const target = (targetCurrency || "USD").toUpperCase();
+        if (from === target) return amountCents;
+
+        const fromRateAgainstUsd = from === "USD" ? 1.0 : (rates[from] || 1.0);
+        const targetRateAgainstUsd = target === "USD" ? 1.0 : (rates[target] || 1.0);
+        const crossRate = targetRateAgainstUsd / fromRateAgainstUsd;
+        return Math.round(amountCents * crossRate);
+    }
 
     async listCustomers(
         organizationId: string,
@@ -36,7 +58,7 @@ export class CrmService {
             whereClause.userId = null;
         }
 
-        const [org, customers, pendingInvitations] = await Promise.all([
+        const [org, customers, pendingInvitations, rates] = await Promise.all([
             this.prisma.organization.findUnique({
                 where: { id: organizationId },
                 select: { currency: true },
@@ -86,6 +108,7 @@ export class CrmService {
                     expiresAt: true,
                 },
             }),
+            this.fxService.getRates(),
         ]);
 
         const orgCurrency = org?.currency || "USD";
@@ -119,18 +142,18 @@ export class CrmService {
                         let payInOrgCents = pay.amountCents;
                         if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null) {
                             payInOrgCents = Number(meta.originalAmountCents);
-                        } else if (meta.exchangeRate && pay.currency !== orgCurrency) {
-                            payInOrgCents = Math.round(pay.amountCents / Number(meta.exchangeRate));
+                        } else if (pay.currency && pay.currency !== orgCurrency) {
+                            payInOrgCents = this.convertCents(pay.amountCents, pay.currency, orgCurrency, rates);
                         }
                         calculatedSpentCents += payInOrgCents;
 
                         for (const ref of (pay.refunds || [])) {
                             if (ref.status === "SUCCEEDED") {
                                 let refInOrgCents = ref.amountCents;
-                                if (meta.exchangeRate && pay.currency !== orgCurrency) {
-                                    refInOrgCents = Math.round(ref.amountCents / Number(meta.exchangeRate));
-                                } else if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null && pay.amountCents > 0) {
+                                if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null && pay.amountCents > 0) {
                                     refInOrgCents = Math.round((ref.amountCents / pay.amountCents) * Number(meta.originalAmountCents));
+                                } else if ((ref.currency || pay.currency) && (ref.currency || pay.currency) !== orgCurrency) {
+                                    refInOrgCents = this.convertCents(ref.amountCents, ref.currency || pay.currency, orgCurrency, rates);
                                 }
                                 calculatedSpentCents -= refInOrgCents;
                             }
@@ -177,7 +200,7 @@ export class CrmService {
         customerId: string,
         isAiActor = false
     ): Promise<CustomerDetailsResponseDto> {
-        const [org, customer] = await Promise.all([
+        const [org, customer, rates] = await Promise.all([
             this.prisma.organization.findUnique({
                 where: { id: organizationId },
                 select: { currency: true },
@@ -226,6 +249,7 @@ export class CrmService {
                 },
             },
         }),
+        this.fxService.getRates(),
     ]);
 
         if (!customer) {
@@ -322,8 +346,8 @@ export class CrmService {
                     let payInOrgCents = pay.amountCents;
                     if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null) {
                         payInOrgCents = Number(meta.originalAmountCents);
-                    } else if (meta.exchangeRate && pay.currency !== orgCurrency) {
-                        payInOrgCents = Math.round(pay.amountCents / Number(meta.exchangeRate));
+                    } else if (pay.currency && pay.currency !== orgCurrency) {
+                        payInOrgCents = this.convertCents(pay.amountCents, pay.currency, orgCurrency, rates);
                     }
                     timeline.push({
                         id: `evt_pay_${pay.id}`,
@@ -344,10 +368,10 @@ export class CrmService {
                     if (ref.status === "SUCCEEDED" && ref.processedAt) {
                         const meta = (pay.metadata as any) || {};
                         let refInOrgCents = ref.amountCents;
-                        if (meta.exchangeRate && pay.currency !== orgCurrency) {
-                            refInOrgCents = Math.round(ref.amountCents / Number(meta.exchangeRate));
-                        } else if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null && pay.amountCents > 0) {
+                        if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null && pay.amountCents > 0) {
                             refInOrgCents = Math.round((ref.amountCents / pay.amountCents) * Number(meta.originalAmountCents));
+                        } else if ((ref.currency || pay.currency) && (ref.currency || pay.currency) !== orgCurrency) {
+                            refInOrgCents = this.convertCents(ref.amountCents, ref.currency || pay.currency, orgCurrency, rates);
                         }
                         timeline.push({
                             id: `evt_ref_${ref.id}`,
@@ -439,18 +463,18 @@ export class CrmService {
                     let payInOrgCents = pay.amountCents;
                     if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null) {
                         payInOrgCents = Number(meta.originalAmountCents);
-                    } else if (meta.exchangeRate && pay.currency !== orgCurrency) {
-                        payInOrgCents = Math.round(pay.amountCents / Number(meta.exchangeRate));
+                    } else if (pay.currency && pay.currency !== orgCurrency) {
+                        payInOrgCents = this.convertCents(pay.amountCents, pay.currency, orgCurrency, rates);
                     }
                     calculatedSpentCents += payInOrgCents;
 
                     for (const ref of (pay.refunds || [])) {
                         if (ref.status === "SUCCEEDED") {
                             let refInOrgCents = ref.amountCents;
-                            if (meta.exchangeRate && pay.currency !== orgCurrency) {
-                                refInOrgCents = Math.round(ref.amountCents / Number(meta.exchangeRate));
-                            } else if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null && pay.amountCents > 0) {
+                            if (meta.originalCurrency === orgCurrency && meta.originalAmountCents != null && pay.amountCents > 0) {
                                 refInOrgCents = Math.round((ref.amountCents / pay.amountCents) * Number(meta.originalAmountCents));
+                            } else if ((ref.currency || pay.currency) && (ref.currency || pay.currency) !== orgCurrency) {
+                                refInOrgCents = this.convertCents(ref.amountCents, ref.currency || pay.currency, orgCurrency, rates);
                             }
                             calculatedSpentCents -= refInOrgCents;
                         }
