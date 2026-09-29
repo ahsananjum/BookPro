@@ -1463,7 +1463,7 @@ export default function BusinessCalendarPage() {
     const mon = new Date(`${dateRange.startDate}T12:00:00Z`);
 
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(150px, 1fr))", gap: "12px", overflowX: "auto", paddingBottom: "12px" }}>
+      <div className="calendar-week-grid" style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(150px, 1fr))", gap: "12px", overflowX: "auto", paddingBottom: "12px" }}>
         {days.map((dayName, idx) => {
           const currentDay = new Date(mon);
           currentDay.setDate(mon.getDate() + idx);
@@ -1795,7 +1795,7 @@ export default function BusinessCalendarPage() {
     ];
 
     return (
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${columns.length}, minmax(260px, 1fr))`, gap: "14px", overflowX: "auto", paddingBottom: "16px" }}>
+      <div className="calendar-staff-grid" style={{ display: "grid", gridTemplateColumns: `repeat(${columns.length}, minmax(260px, 1fr))`, gap: "14px", overflowX: "auto", paddingBottom: "16px" }}>
         {columns.map((col) => {
           const colAppts = filteredAppointments.filter((a) => {
             if (col.id === "UNASSIGNED") return !a.staffId;
@@ -2007,7 +2007,7 @@ export default function BusinessCalendarPage() {
                   depth3D
                   style={{ padding: "20px 24px", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "16px" }}
                 >
-                  <div style={{ display: "grid", gap: "6px", minWidth: "280px", flex: 1 }}>
+                  <div className="calendar-queue-details" style={{ display: "grid", gap: "6px", minWidth: "280px", flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                       <span style={{ fontSize: "15px", fontWeight: 850, color: "#38bdf8" }}>
                         ⏱ {new Date(appt.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -2225,6 +2225,7 @@ export default function BusinessCalendarPage() {
 
       {/* CONTROLS BAR: Views + Date Navigator + Filters */}
       <div
+        className="calendar-controls"
         style={{
           backgroundColor: "#0f172a",
           borderRadius: "12px",

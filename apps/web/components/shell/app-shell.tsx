@@ -89,6 +89,10 @@ export function AppShell({
 
   const newMenuRef = useRef<HTMLDivElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileDrawerRef = useRef<HTMLElement>(null);
+  const mobileWasOpen = useRef(false);
 
   const groups = useMemo(
     () => (user ? visibleNavigation(navigation, user) : []),
@@ -153,13 +157,51 @@ export function AppShell({
     });
   }, [user]);
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflowY;
+    document.body.style.overflowY = "hidden";
+    return () => { document.body.style.overflowY = previousOverflow; };
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 901px)");
+    const closeOnDesktop = () => { if (desktop.matches) setMobileOpen(false); };
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, []);
+
+  useEffect(() => {
+    if (mobileOpen) {
+      mobileCloseButtonRef.current?.focus();
+    } else if (mobileWasOpen.current) {
+      mobileMenuButtonRef.current?.focus();
+    }
+    mobileWasOpen.current = mobileOpen;
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function keepFocusInDrawer(event: KeyboardEvent) {
+      if (event.key !== "Tab" || !mobileDrawerRef.current) return;
+      const focusable = Array.from(mobileDrawerRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), [tabindex]:not([tabindex='-1'])"));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    document.addEventListener("keydown", keepFocusInDrawer);
+    return () => document.removeEventListener("keydown", keepFocusInDrawer);
+  }, [mobileOpen]);
+
   if (!user) return null;
 
   const userInitial = user.fullName ? user.fullName.charAt(0).toUpperCase() : "U";
 
-  const renderNavGroup = (group: NavigationGroup, idx: number) => (
+  const renderNavGroup = (group: NavigationGroup, idx: number, compact = collapsed) => (
     <section className="shell-nav-group" key={group.label || idx}>
-      {group.label && !collapsed && <h2>{group.label}</h2>}
+      {group.label && !compact && <h2>{group.label}</h2>}
       {group.items.map((item) => {
         const active =
           pathname === item.href ||
@@ -171,7 +213,7 @@ export function AppShell({
             href={item.href}
             className={`shell-nav-link ${active ? "is-active" : ""}`}
             aria-current={active ? "page" : undefined}
-            title={collapsed ? item.label : undefined}
+            title={compact ? item.label : undefined}
             style={{ position: "relative", zIndex: 1 }}
           >
             {active && (
@@ -191,7 +233,7 @@ export function AppShell({
               />
             )}
             <Icon size={18} aria-hidden="true" className="shell-nav-icon" style={{ position: "relative", zIndex: 2 }} />
-            {!collapsed && <span style={{ position: "relative", zIndex: 2 }}>{item.label}</span>}
+            {!compact && <span style={{ position: "relative", zIndex: 2 }}>{item.label}</span>}
           </Link>
         );
       })}
@@ -235,7 +277,7 @@ export function AppShell({
 
         {/* Grouped Nav Items */}
         <nav className="shell-navigation" aria-label={`${productLabel} navigation`}>
-          {groups.map(renderNavGroup)}
+          {groups.map((group, idx) => renderNavGroup(group, idx))}
         </nav>
 
         {/* Pinned Bottom Area */}
@@ -289,11 +331,12 @@ export function AppShell({
               transition={{ duration: 0.2 }}
             />
             <motion.aside
+              ref={mobileDrawerRef}
               className="shell-mobile-drawer is-open"
               aria-hidden={!mobileOpen}
               role="dialog"
               aria-modal="true"
-              aria-label="Mobile Navigation Drawer"
+              aria-label={`${productLabel} navigation`}
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
@@ -312,6 +355,7 @@ export function AppShell({
                 <button
                   type="button"
                   className="shell-icon-button shell-mobile-close"
+                  ref={mobileCloseButtonRef}
                   onClick={() => setMobileOpen(false)}
                   aria-label="Close navigation"
                 >
@@ -324,7 +368,7 @@ export function AppShell({
               </div>
 
               <nav className="shell-navigation" aria-label="Mobile navigation">
-                {groups.map(renderNavGroup)}
+                {groups.map((group, idx) => renderNavGroup(group, idx, false))}
               </nav>
 
               <div style={{ marginTop: "auto", paddingTop: "20px", borderTop: "1px solid #1e293b" }}>
@@ -350,8 +394,10 @@ export function AppShell({
           <button
             type="button"
             className="shell-icon-button shell-menu-button"
+            ref={mobileMenuButtonRef}
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation"
+            aria-expanded={mobileOpen}
           >
             <Menu size={21} />
           </button>

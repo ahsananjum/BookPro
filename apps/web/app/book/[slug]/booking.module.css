@@ -728,3 +728,24 @@
   }
 }
 
+/* Hallmark · mobile booking flow · pre-emit critique: P4 H4 E4 S5 R5 V4 */
+@media (max-width: 40rem) {
+  .headerInner, .brandGroup, .brandInfo, .mainLayout, .workflowPanel, .summaryPanel { min-width: 0; }
+  .brandTitle, .brandSubtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 11rem; }
+  .stepperInner { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .25rem; overflow-x: visible; }
+  .stepDivider { display: none; }
+  .stepItem { min-width: 0; flex-direction: column; gap: .25rem; padding: .25rem 0; font-size: 0; text-align: center; }
+  .stepCircle { flex: 0 0 auto; }
+  .stepItem span::after { content: attr(data-mobile-label); display: block; font-size: .65rem; white-space: nowrap; }
+  .stepItem span { font-size: 0; }
+  .holdBanner { flex-wrap: wrap; padding-inline: .75rem !important; }
+  .holdBanner > div { flex-wrap: wrap; }
+  .serviceTopRow { min-width: 0; gap: .5rem; }
+  .serviceName { min-width: 0; overflow-wrap: anywhere; }
+  .staffGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calendarNav { gap: .5rem; }
+  .monthTitle { font-size: .9rem; white-space: nowrap; }
+  .daysGrid { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .15rem; }
+  .dayCell { min-width: 0; }
+}
+

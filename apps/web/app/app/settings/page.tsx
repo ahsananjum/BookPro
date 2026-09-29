@@ -273,7 +273,7 @@ export default function BusinessSettingsPage() {
   ];
 
   return (
-    <div>
+    <div className="settings-page">
       <PageHeader
         title="Business Settings & Policies"
         description="Authoritative controls for organization profile, localized currencies, custom branding, and online booking cancellation rules."

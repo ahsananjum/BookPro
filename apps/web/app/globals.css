@@ -173,6 +173,77 @@ button:disabled { cursor: not-allowed; opacity: .58; }
   .shell-topbar-breadcrumb .shell-topbar-page { color: #f8fafc; font-weight: 750; }
 }
 
+/* Hallmark · mobile workspace pass · preserve BookPro Midnight tokens and desktop layouts
+ * pre-emit critique: P4 H4 E4 S5 R5 V4
+ */
+@media (max-width: 900px) {
+  .product-shell, .shell-stage, .shell-content { min-width: 0; }
+  .shell-content > * { min-width: 0; max-width: 100%; }
+  .shell-mobile-drawer { width: min(21rem, 88%); height: 100dvh; padding: 1rem 1rem max(1rem, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
+  .shell-mobile-drawer .shell-navigation { flex: none; gap: 1rem; }
+  .shell-mobile-drawer .shell-nav-link { min-height: 2.9rem; white-space: nowrap; }
+  .shell-mobile-drawer .shell-user-logout { min-width: 2.75rem; min-height: 2.75rem; }
+  .shell-menu-button, .shell-mobile-close { min-width: 2.75rem; min-height: 2.75rem; }
+}
+@media (max-width: 640px) {
+  .shell-topbar { gap: .55rem; height: 3.75rem; }
+  .shell-topbar-breadcrumb { min-width: 0; flex: 1; max-width: none; }
+  .shell-topbar-page { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .shell-topbar-actions { gap: .4rem; flex: 0 0 auto; }
+  .shell-create-btn { min-height: 2.75rem; padding-inline: .65rem; white-space: nowrap; }
+  .shell-create-btn svg:last-child { display: none; }
+  .shell-create-menu { width: min(16.5rem, calc(100vw - 1.5rem)); }
+  .shell-account-trigger { min-width: 2.75rem; min-height: 2.75rem; justify-content: center; padding: .3rem; }
+  .shell-account-trigger > div:last-child { display: none !important; }
+  .page-header { margin-bottom: 1.25rem; }
+  .page-header h1 { min-width: 0; font-size: clamp(1.55rem, 7vw, 1.9rem); overflow-wrap: anywhere; }
+  .page-header-actions { min-width: 0; width: 100%; }
+  .page-header-actions > * { max-width: 100%; }
+  .shell-content { padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
+  .agenda-appointment-item { grid-template-columns: minmax(0, 1fr) auto !important; gap: .75rem !important; padding: .9rem !important; }
+  .agenda-appointment-item > :nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .agenda-appointment-item > :nth-child(n+3) { min-width: 0; }
+  .customers-workspace-grid { grid-template-columns: minmax(0, 1fr) !important; min-height: 0 !important; }
+  .customers-directory-panel { max-height: min(34rem, 60dvh) !important; }
+  .customers-detail-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .services-catalog-grid, .staff-roster-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .calendar-week-grid, .calendar-staff-grid { grid-template-columns: minmax(0, 1fr) !important; overflow-x: visible !important; }
+  .calendar-queue-details { min-width: 0 !important; }
+  .calendar-controls { padding: .85rem !important; }
+  .calendar-controls > div { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+  .calendar-controls input[type="date"] { max-width: 100%; min-width: 0; }
+  .calendar-controls button, .calendar-controls select { white-space: nowrap; min-height: 2.5rem; }
+  .settings-page div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .settings-page input, .settings-page select, .settings-page textarea { max-width: 100%; min-width: 0; }
+}
+@media (max-width: 480px) {
+  .shell-content { padding-inline: .75rem; }
+  .customers-detail-metrics { gap: .5rem !important; }
+  .customer-portal-auth { display: none !important; }
+  .customer-portal-topbar { padding-inline: .75rem !important; }
+  .customer-portal-topbar > div:first-child { min-width: 0; }
+  .customer-portal-topbar > div:first-child a { min-width: 0; }
+  .customer-portal-topbar > div:first-child a > div { min-width: 0; }
+  .customer-portal-topbar > div:first-child strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 11rem; }
+}
+.customer-portal-mobile-nav { max-height: calc(100dvh - 4.4rem); overflow-y: auto; overscroll-behavior: contain; }
+@media (min-width: 68.75rem) { .customer-portal-mobile-nav { display: none !important; } }
+.customer-portal-mobile-auth { display: flex; gap: .5rem; }
+.customer-portal-mobile-auth a { flex: 1; min-width: 0; min-height: 2.75rem; display: grid; place-items: center; border: 1px solid var(--portal-rule-strong); border-radius: .6rem; color: var(--portal-ink); text-decoration: none; font-size: .8rem; font-weight: 750; white-space: nowrap; }
+.customers-back-button { display: none; }
+@media (max-width: 900px) {
+  .customers-workspace-grid { grid-template-columns: minmax(0, 1fr) !important; min-height: 0 !important; }
+  .customers-workspace-grid .customers-detail-panel { display: none !important; }
+  .customers-workspace-grid.is-detail-open .customers-directory-panel { display: none !important; }
+  .customers-workspace-grid.is-detail-open .customers-detail-panel { display: flex !important; }
+  .customers-back-button { display: inline-flex; align-self: start; min-height: 2.75rem; align-items: center; border: 1px solid var(--portal-rule-strong); border-radius: .55rem; background: var(--portal-surface-raised); color: var(--portal-accent); padding: .55rem .8rem; font-weight: 750; }
+}
+@media (max-width: 700px) {
+  .customer-portal-auth { display: none !important; }
+  .customer-portal-account-trigger > span:nth-child(2) { display: none !important; }
+  .customer-portal-actions { gap: .4rem !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shell-mobile-drawer, .shell-sidebar, .shell-stage, .skeleton-box { transition: none; animation: none; }
 }

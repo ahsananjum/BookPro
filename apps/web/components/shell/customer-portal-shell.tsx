@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../../lib/auth-context";
@@ -52,6 +52,8 @@ export function CustomerPortalShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
 
+  useEffect(() => { setMobileMenuOpen(false); setAccountDropdownOpen(false); }, [pathname]);
+
   const isCustomer = user?.actorType === ActorType.CUSTOMER;
   const displayName = tenantInfo?.brandName || tenantInfo?.name || organizationName;
   const accentColor = tenantInfo?.primaryColor || "#0284c7";
@@ -102,6 +104,7 @@ export function CustomerPortalShell({
         }}
       >
         <div
+          className="customer-portal-topbar"
           style={{
             maxWidth: "1280px",
             margin: "0 auto",
@@ -320,7 +323,7 @@ export function CustomerPortalShell({
           </nav>
 
           {/* Right Action Area: User Account & Global Directory Link */}
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div className="customer-portal-actions" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             {tenantInfo && (
               <Link
                 href="/organizations"
@@ -346,6 +349,7 @@ export function CustomerPortalShell({
             {user ? (
               <div style={{ position: "relative" }}>
                 <button
+                  className="customer-portal-account-trigger"
                   onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
                   style={{
                     display: "flex",
@@ -550,7 +554,7 @@ export function CustomerPortalShell({
                 )}
               </div>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div className="customer-portal-auth" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <Link
                   href={`/login?returnTo=${encodeURIComponent(pathname)}`}
                   style={{
@@ -599,6 +603,7 @@ export function CustomerPortalShell({
               }}
               className="mobile-menu-btn"
               aria-label="Toggle navigation menu"
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
@@ -608,6 +613,7 @@ export function CustomerPortalShell({
         {/* Mobile Dropdown Navigation */}
         {mobileMenuOpen && (
           <div
+            className="customer-portal-mobile-nav"
             style={{
               padding: "16px 24px 24px",
               backgroundColor: "#0a0f1a",
@@ -616,6 +622,12 @@ export function CustomerPortalShell({
               gap: "8px",
             }}
           >
+            {!user && (
+              <div className="customer-portal-mobile-auth">
+                <Link href={`/login?returnTo=${encodeURIComponent(pathname)}`} onClick={() => setMobileMenuOpen(false)}>Sign in</Link>
+                <Link href="/register/customer" onClick={() => setMobileMenuOpen(false)}>Create account</Link>
+              </div>
+            )}
             {tenantInfo ? (
               tenantNavLinks.map((link) => {
                 if (link.requiresCustomer && !isCustomer) return null;
@@ -815,7 +827,7 @@ export function CustomerPortalShell({
 
       {/* Global Responsive Nav CSS */}
       <style jsx global>{`
-        @media (min-width: 768px) {
+        @media (min-width: 1100px) {
           .desktop-nav {
             display: flex !important;
           }

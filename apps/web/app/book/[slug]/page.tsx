@@ -1210,6 +1210,7 @@ export default function PublicBookingPage() {
         {/* Floating Active Hold Timer Banner */}
         {holdTimeLeftSec !== null && holdTimeLeftSec > 0 && !isHoldExpired && (
           <div
+            className={styles.holdBanner}
             style={{
               position: "sticky",
               top: "70px",
@@ -1276,7 +1277,7 @@ export default function PublicBookingPage() {
               }}
             >
               <div className={styles.stepCircle}>1</div>
-              <span>Service & Staff</span>
+              <span data-mobile-label="Service">Service & Staff</span>
             </div>
 
           <div className={styles.stepDivider} />
@@ -1290,7 +1291,7 @@ export default function PublicBookingPage() {
             }}
           >
             <div className={styles.stepCircle}>2</div>
-            <span>Time & Slot</span>
+            <span data-mobile-label="Time">Time & Slot</span>
           </div>
 
           <div className={styles.stepDivider} />
@@ -1301,14 +1302,14 @@ export default function PublicBookingPage() {
             }`}
           >
             <div className={styles.stepCircle}>3</div>
-            <span>Your Details</span>
+            <span data-mobile-label="Details">Your Details</span>
           </div>
 
           <div className={styles.stepDivider} />
 
           <div className={`${styles.stepItem} ${currentStep === 4 ? styles.stepItemActive : ""}`}>
             <div className={styles.stepCircle}>4</div>
-            <span>Review & Pay</span>
+            <span data-mobile-label="Pay">Review & Pay</span>
           </div>
         </div>
       </div>

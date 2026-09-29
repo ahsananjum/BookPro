@@ -105,6 +105,7 @@ export default function CustomersPage() {
   const orgId = user?.organizationId || "";
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [customerDetails, setCustomerDetails] = useState<CustomerDetails | null>(null);
   const orgCurrency = customerDetails?.currency || customers[0]?.currency || user?.currency || "USD";
   const [search, setSearch] = useState("");
@@ -617,6 +618,7 @@ export default function CustomersPage() {
 
       {/* Main Workspace Split Grid */}
       <div
+        className={`customers-workspace-grid ${mobileDetailsOpen ? "is-detail-open" : ""}`}
         style={{
           display: "grid",
           gridTemplateColumns: "380px 1fr",
@@ -627,6 +629,7 @@ export default function CustomersPage() {
       >
         {/* Left Column: Customer Directory */}
         <aside
+          className="customers-directory-panel"
           style={{
             backgroundColor: "rgba(15, 23, 42, 0.75)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
@@ -811,7 +814,7 @@ export default function CustomersPage() {
                   return (
                     <motion.div
                       key={c.id}
-                      onClick={() => setSelectedCustomerId(c.id)}
+                      onClick={() => { setSelectedCustomerId(c.id); setMobileDetailsOpen(true); }}
                       whileHover={{ scale: 1.01, x: 2 }}
                       whileTap={{ scale: 0.99 }}
                       transition={{ type: "spring", stiffness: 450, damping: 30 }}
@@ -936,7 +939,8 @@ export default function CustomersPage() {
         </aside>
 
         {/* Right Column: Customer Intelligence Workspace */}
-        <main style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <main className="customers-detail-panel" style={{ display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 }}>
+          <button type="button" className="customers-back-button" onClick={() => setMobileDetailsOpen(false)}>← All customers</button>
           {loadingDetails && !customerDetails ? (
             <GlassCard variant="card" style={{ padding: "60px 24px", textAlign: "center", color: "#94a3b8" }}>
               Loading comprehensive customer intelligence...
@@ -1122,6 +1126,7 @@ export default function CustomersPage() {
 
                 {/* Metrics Sub-strip */}
                 <div
+                  className="customers-detail-metrics"
                   style={{
                     display: "grid",
                     gridTemplateColumns: "repeat(4, 1fr)",
