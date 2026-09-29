@@ -728,6 +728,7 @@ describe('P0-07: Cancellation Quotes & Refund Accounting (Unit & Integration)', 
                 rateValueSnapshot: 2000, // 20.00%
                 calculationBasisSnapshot: 'NET_SERVICE_PRICE',
                 ruleVersionSnapshot: 1,
+                currency: 'USD',
                 status: CommissionStatus.PENDING,
             };
             inMemoryDb.commissionRecords.push(commission);

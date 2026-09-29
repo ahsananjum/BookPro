@@ -10,6 +10,12 @@ jobs:
   validate:
     name: Lint, Typecheck, Test & Build
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://bookpro_user:bookpro_pass@localhost:5432/bookpro_test?schema=public
+      DIRECT_URL: postgresql://bookpro_user:bookpro_pass@localhost:5432/bookpro_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: bookpro-ci-only-jwt-secret-rotate-never-use-in-production
+      COOKIE_SECRET: bookpro-ci-only-cookie-secret-rotate-never-use
 
     services:
       postgres:
@@ -41,7 +47,7 @@ jobs:
 
       - uses: pnpm/action-setup@v3
         with:
-          version: 8
+          version: 8.15.4
 
       - uses: actions/setup-node@v4
         with:
@@ -51,17 +57,28 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Apply Database Migrations
+        run: pnpm exec prisma migrate deploy --schema=prisma/schema.prisma
+
       - name: Monorepo Typecheck
         run: pnpm typecheck
 
       - name: Monorepo Lint
         run: pnpm lint
 
-      - name: Generate Prisma Client
-        run: npx prisma generate --schema=prisma/schema.prisma
-
       - name: Run Unit Tests
         run: pnpm test
+
+      - name: Install Playwright browser
+        run: pnpm --filter @bookpro/web exec playwright install --with-deps chromium
+
+      - name: Run Web End-to-End Tests
+        env:
+          CI: "true"
+        run: pnpm --filter @bookpro/web test:e2e
 
       - name: Build All Workspaces
         run: pnpm build

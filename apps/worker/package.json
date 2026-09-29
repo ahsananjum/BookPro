@@ -9,7 +9,7 @@
         "start": "node dist/worker.js",
         "lint": "eslint \"src/**/*.ts\"",
         "typecheck": "tsc --noEmit",
-        "test": "jest --config jest.config.cjs"
+        "test": "jest --config jest.config.cjs --runInBand"
     },
     "dependencies": {
         "@bookpro/config": "workspace:*",

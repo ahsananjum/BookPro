@@ -9,7 +9,7 @@
         "start:prod": "node dist/main",
         "lint": "eslint \"src/**/*.ts\"",
         "typecheck": "tsc --noEmit",
-        "test": "jest",
+        "test": "jest --runInBand",
         "test:integration": "jest --config ../../tests/api/jest-integration.json"
     },
     "dependencies": {
